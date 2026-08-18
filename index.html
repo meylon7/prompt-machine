@@ -1325,7 +1325,7 @@ button { font-family: inherit; cursor: pointer; }
   <footer class="footer">
     <span class="chip-meta">HEBREW UI &middot; ENGLISH PROMPTS</span>
     <span class="chip-meta">NO SERVER &middot; ONE FILE</span>
-    <span class="chip-meta" data-build>BUILD 18.08 14:25</span>
+    <span class="chip-meta" data-build>BUILD 18.08 14:27</span>
   </footer>
 
 </div>
@@ -4849,6 +4849,12 @@ function initForm(root, lib, hooks = {}) {
 
   return {
     getSpec() { return spec; },
+    applyReference(report) {
+      refReport = report;
+      refApplied.clear();
+      activeGroup = 'reference';
+      render();
+    },
     load(newSpec) {
       spec = toAuthoringShape(newSpec);
       activeGroup = 'basis';
@@ -4954,6 +4960,8 @@ function initIdentity(root, lib, hooks = {}) {
     traits: {},          /* guided field key -> english value */
     extraTraits: [],
     reference: '',
+    refReport: null,
+    refUrl: null,
     seed: '',
     views: null,         /* null -> the recommended set */
   };
@@ -5020,7 +5028,7 @@ function initIdentity(root, lib, hooks = {}) {
         label: 'החלת הדמות על הטופס המקצועי',
         onClick: () => {
           if (hooks.applyToPro && currentTraits().length) {
-            hooks.applyToPro(identityObject(), state.seed);
+            hooks.applyToPro(identityObject(), state.seed, state.refReport);
           }
         },
       },
@@ -5244,6 +5252,119 @@ function initIdentity(root, lib, hooks = {}) {
         `${chosen.length} פאנלים → ${rows} שורות של ${cols}. `
         + 'הפרומפט משמאל הוא לוח הייחוס: הרץ אותו פעם אחת, שמור את התוצאה, '
         + 'וצרף אותה לכל פריים בסדרה.'));
+
+      /* a reference photograph can be dropped here and measured on the spot:
+         the file names itself into the field below, and the physics it
+         carries travels to the professional form when the identity does */
+      stepPane.append(el('div', 'panel-label', 'צילום רפרנס (רשות)'));
+      stepPane.append(el('div', 'field-note',
+        'יש לכם כבר צילום של הדמות או של המוצר? גררו אותו לכאן. המערכת תמדוד '
+        + 'ממנו את האור, הגרייד ויחס התמונה בתוך הדפדפן, תמלא את שם הקובץ '
+        + 'למטה, ותעביר את המדידות לטופס המקצועי יחד עם הדמות. הצילום לא '
+        + 'עולה לשום שרת ולא נשמר.'));
+
+      const refFile = el('input');
+      refFile.type = 'file';
+      refFile.accept = 'image/*';
+      refFile.hidden = true;
+      stepPane.append(refFile);
+
+      const refDrop = el('div', 'ref-drop');
+      refDrop.append(el('span', 'ref-drop-title',
+        state.refReport ? 'צילום נמדד. אפשר להחליף אותו' : 'גררו לכאן צילום, או לחצו לבחירה'));
+      refDrop.append(el('span', 'ref-drop-sub', 'JPG, PNG או WEBP'));
+      refDrop.addEventListener('click', () => refFile.click());
+      ['dragenter', 'dragover'].forEach((n) => refDrop.addEventListener(n, (e) => {
+        e.preventDefault(); refDrop.classList.add('over');
+      }));
+      ['dragleave', 'drop'].forEach((n) => refDrop.addEventListener(n, (e) => {
+        e.preventDefault(); refDrop.classList.remove('over');
+      }));
+      const takeRef = (file) => {
+        if (!file || !file.type.startsWith('image/')) return;
+        const url = URL.createObjectURL(file);
+        const img = new Image();
+        img.onload = () => {
+          const max = 1000;
+          const scale = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+          const w = Math.max(2, Math.round(img.naturalWidth * scale));
+          const h = Math.max(2, Math.round(img.naturalHeight * scale));
+          const canvas = document.createElement('canvas');
+          canvas.width = w; canvas.height = h;
+          const ctx = canvas.getContext('2d', { willReadFrequently: true });
+          ctx.imageSmoothingEnabled = false;
+          ctx.drawImage(img, 0, 0, w, h);
+          const report = globalThis.PM.analyzePixels(
+            ctx.getImageData(0, 0, w, h).data, w, h);
+          report.aspect.width = img.naturalWidth;
+          report.aspect.height = img.naturalHeight;
+          report.aspect.value = img.naturalWidth / img.naturalHeight;
+          let best = globalThis.PM.COMMON_RATIOS[0];
+          for (const entry of globalThis.PM.COMMON_RATIOS) {
+            if (Math.abs(entry[1] - report.aspect.value)
+                < Math.abs(best[1] - report.aspect.value)) best = entry;
+          }
+          report.aspect.nearest = best[0];
+          if (state.refUrl) URL.revokeObjectURL(state.refUrl);
+          state.refReport = report;
+          state.refUrl = url;
+          if (!state.reference) state.reference = file.name;
+          render();
+        };
+        img.onerror = () => URL.revokeObjectURL(url);
+        img.src = url;
+      };
+      refDrop.addEventListener('drop', (e) => takeRef(e.dataTransfer.files[0]));
+      refFile.addEventListener('change', () => takeRef(refFile.files[0]));
+      stepPane.append(refDrop);
+
+      if (state.refReport) {
+        const r = state.refReport;
+        const seen = el('div', 'ref-layout');
+        const thumbWrap = el('div', 'ref-seen');
+        const thumb = el('img', 'ref-thumb');
+        thumb.src = state.refUrl;
+        thumb.alt = 'צילום הרפרנס';
+        thumbWrap.append(thumb);
+        const swatches = el('div', 'ref-palette');
+        for (const colour of r.colour.palette) {
+          const chip = el('span', 'ref-swatch');
+          chip.style.background = colour.hex;
+          globalThis.PM.attachPopover(chip, {
+            title: colour.name,
+            lines: [{ text: `${colour.share}% מהפריים` }, { text: colour.hex, mono: true }],
+          });
+          swatches.append(chip);
+        }
+        thumbWrap.append(swatches);
+        seen.append(thumbWrap);
+
+        const strip = el('div', 'summary-strip ref-strip');
+        const cell = (caption, value) => {
+          const box = el('div', 'summary-cell');
+          box.append(el('span', 'summary-caption', caption));
+          box.append(el('span', 'summary-value', value));
+          return box;
+        };
+        const SIDE = { camera_left: 'משמאל למצלמה', camera_right: 'מימין למצלמה',
+                       frontal: 'חזיתי' };
+        const QUAL = { soft: 'רך', medium: 'בינוני', hard: 'קשה' };
+        const CAST = { warm: 'חמה', neutral: 'ניטרלית', cool: 'קרה' };
+        const DEPTH = { shallow: 'רדוד', medium: 'בינוני', deep: 'עמוק' };
+        strip.append(cell('יחס', r.aspect.nearest));
+        strip.append(cell('אור', SIDE[r.light.side]));
+        strip.append(cell('יחס מפתח', r.light.ratio));
+        strip.append(cell('איכות האור', QUAL[r.light.quality]));
+        strip.append(cell('טמפרטורה', `${CAST[r.colour.cast]} · ${r.colour.kelvin}K`));
+        strip.append(cell('עומק שדה', DEPTH[r.focus.depth]));
+        const measured = el('div', 'ref-measured');
+        measured.append(strip);
+        measured.append(el('p', 'field-note',
+          'המדידות האלה יעברו לטופס המקצועי כשתלחצו על החלת הדמות, ושם תוכלו '
+          + 'לבחור מה מהן להחיל.'));
+        seen.append(measured);
+        stepPane.append(seen);
+      }
 
       stepPane.append(el('div', 'panel-label', 'שם קובץ הרפרנס (אחרי שתריץ את הלוח)'));
       const refInput = el('input', 'free-text');
@@ -6895,8 +7016,11 @@ if (Object.keys(LIB).length) {
     },
   });
   globalThis.PM.initIdentity(document.getElementById('identity-root'), LIB, {
-    applyToPro(identity, seed) {
+    applyToPro(identity, seed, refReport) {
       formApi.setIdentity(identity, seed);
+      /* a reference measured on the identity screen keeps travelling: the
+         form opens on it, with the offers waiting to be accepted */
+      if (refReport) formApi.applyReference(refReport);
       setMode('pro');
     },
   });
