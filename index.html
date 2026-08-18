@@ -1201,7 +1201,7 @@ button { font-family: inherit; cursor: pointer; }
       </button>
     </div>
     <div class="gate-links">
-      <button class="gate-link" data-goto="examples">ספריית הדוגמאות — 13 עבודות גמורות להעתקה</button>
+      <button class="gate-link" data-goto="examples">ספריית הדוגמאות: 13 עבודות גמורות להעתקה</button>
       <span class="gate-link-sep" aria-hidden="true">·</span>
       <button class="gate-link" data-goto="explain">איך זה עובד</button>
       <span class="gate-link-sep" data-bank-btn hidden aria-hidden="true">·</span>
@@ -1209,7 +1209,7 @@ button { font-family: inherit; cursor: pointer; }
     </div>
     <div class="gate-links" data-admin-btn hidden>
       <button class="gate-card gate-admin-card" data-goto="admin">
-        <span class="gate-card-label">ניהול — בק-אופיס למרצה</span>
+        <span class="gate-card-label">ניהול: בק-אופיס למרצה</span>
         <span class="gate-card-sub">תלמידים, חסימות, ובנק הפרומפטים</span>
       </button>
     </div>
@@ -2683,7 +2683,7 @@ function createOutputPane(lib, getSpec, options = {}) {
     chipDof.textContent = dof
       ? (dof.far_cm === null ? `DOF ${dof.near_cm}cm - INF`
                              : `DOF ${dof.total_cm}cm SHARP`)
-      : 'DOF —';
+      : 'DOF -';
 
     if (report.errors.length && !placeholders.length) {
       statusPill.textContent = `${report.errors.length} שגיאות`;
@@ -3049,28 +3049,28 @@ function initQuick(root, lib, hooks = {}) {
   const subjectPane = makePane();
   explainFor('subject', subjectPane);
   freeTextRow(subjectPane, 'typedSubject',
-    'תאר נושא במילים שלך — עברית או אנגלית — או בחר מהאריחים…');
+    'תאר נושא במילים שלך, בעברית או באנגלית, או בחר מהאריחים…');
   const subjectGrid = el('div', 'tile-grid option-grid');
   subjectPane.append(subjectGrid);
 
   const envPane = makePane();
   explainFor('environment', envPane);
   freeTextRow(envPane, 'typedEnvironment',
-    'תאר סביבה במילים שלך — עברית או אנגלית — או בחר מהאריחים…');
+    'תאר סביבה במילים שלך, בעברית או באנגלית, או בחר מהאריחים…');
   const envGrid = el('div', 'tile-grid option-grid');
   envPane.append(envGrid);
 
   const moodPane = makePane();
   explainFor('mood', moodPane);
   freeTextRow(moodPane, 'typedMood',
-    'תאר אווירה במילים שלך — היא תיכנס לגרייד, לא תזיז אור…');
+    'תאר אווירה במילים שלך: היא תיכנס לגרייד, לא תזיז אור…');
   const moodGrid = el('div', 'tile-grid option-grid');
   moodPane.append(moodGrid);
 
   const momentPane = makePane();
   explainFor('moment', momentPane);
   freeTextRow(momentPane, 'typedMoment',
-    'תאר את הרגע במילים שלך — מה הגוף עושה בשנייה הזאת…');
+    'תאר את הרגע במילים שלך: מה הגוף עושה בשנייה הזאת…');
   const momentGrid = el('div', 'tile-grid option-grid moment-grid');
   momentPane.append(momentGrid);
 
@@ -3085,8 +3085,8 @@ function initQuick(root, lib, hooks = {}) {
   function stepSummaries() {
     const label = (axis, index, typedKey) => {
       if (state[typedKey]) return 'במילים שלך';
-      if (index === null) return '—';
-      return (axisOptions(quick, state.recipe, axis)[index] || {}).label || '—';
+      if (index === null) return '-';
+      return (axisOptions(quick, state.recipe, axis)[index] || {}).label || '-';
     };
     const moments = momentOptions(quick, state.recipe);
     const aspect = state.aspect === null
@@ -3434,7 +3434,7 @@ function initForm(root, lib, hooks = {}) {
     });
     if (optionKey && options[optionKey]) {
       const select = el('select', 'field-select');
-      select.append(new Option('— בחר מהרשימה —', ''));
+      select.append(new Option('בחר מהרשימה', ''));
       for (const option of options[optionKey]) {
         select.append(new Option(option.label, option.value));
       }
@@ -3453,7 +3453,7 @@ function initForm(root, lib, hooks = {}) {
 
   function selectField(path, entries, helpKey, labelText, onChange) {
     const select = el('select', 'field-select');
-    select.append(new Option('— טרם הוחלט —', ''));
+    select.append(new Option('טרם הוחלט', ''));
     for (const [value, label] of entries) select.append(new Option(label, value));
     select.value = get(path) ?? '';
     select.addEventListener('change', () => {
@@ -3498,7 +3498,7 @@ function initForm(root, lib, hooks = {}) {
     redraw();
     const input = el('input', 'free-text');
     const note = el('div', 'field-note');
-    input.placeholder = 'הוספה — עברית או אנגלית — ואנטר…';
+    input.placeholder = 'הוספה בעברית או באנגלית, ואנטר…';
     input.addEventListener('keydown', (event) => {
       if (event.key !== 'Enter' || !input.value.trim()) return;
       let value = input.value.trim();
@@ -3519,7 +3519,7 @@ function initForm(root, lib, hooks = {}) {
     });
     if (optionKey && options[optionKey]) {
       const select = el('select', 'field-select');
-      select.append(new Option('— הוספה מהרשימה —', ''));
+      select.append(new Option('הוספה מהרשימה', ''));
       for (const option of options[optionKey]) {
         select.append(new Option(option.label, option.value));
       }
@@ -3664,7 +3664,7 @@ function initForm(root, lib, hooks = {}) {
     basis() {
       /* an optional authored starting point; blank stays blank until asked */
       const template = el('select', 'field-select');
-      template.append(new Option('— התחלה ריקה, אני מחליט הכל —', ''));
+      template.append(new Option('התחלה ריקה, אני מחליט הכל', ''));
       for (const key of lib.quick_he._order) {
         template.append(new Option(
           `תבנית: ${lib.quick_he.recipes[key].label}`, key));
@@ -3956,12 +3956,12 @@ function initForm(root, lib, hooks = {}) {
       const dof = globalThis.PM.depthOfField(
         globalThis.PM.normalizeSpec(spec).camera);
       groupPane.append(summaryStrip([
-        ['גוף', labels.body_class[spec.camera.body_class] || '—'],
+        ['גוף', labels.body_class[spec.camera.body_class] || '-'],
         ['אורך מוקד', `${spec.camera.focal_length_mm}mm`],
-        ['צמצם', spec.camera.aperture || '—'],
+        ['צמצם', spec.camera.aperture || '-'],
         ['אזור חדות', dof
           ? (dof.far_cm === null ? `${dof.near_cm}cm - INF` : `${dof.total_cm}cm`)
-          : '—'],
+          : '-'],
       ]));
 
       /* --- body tiles with icons --- */
@@ -4098,7 +4098,7 @@ function initForm(root, lib, hooks = {}) {
         ownList.append(chip);
       }
       const addInput = el('input', 'free-text');
-      addInput.placeholder = 'נגטיב משלך — עברית או אנגלית — ואנטר…';
+      addInput.placeholder = 'נגטיב משלך בעברית או באנגלית, ואנטר…';
       addInput.addEventListener('keydown', (event) => {
         if (event.key !== 'Enter' || !addInput.value.trim()) return;
         let value = addInput.value.trim();
@@ -4473,7 +4473,7 @@ function initIdentity(root, lib, hooks = {}) {
           stepPane.append(label);
           if (field.options && field.options.length) {
             const select = el('select', 'field-select');
-            select.append(new Option('— טרם הוחלט —', ''));
+            select.append(new Option('טרם הוחלט', ''));
             for (const option of field.options) {
               select.append(new Option(option.label || option.value, option.value));
             }
@@ -4522,7 +4522,7 @@ function initIdentity(root, lib, hooks = {}) {
       ]));
       if (!data) {
         stepPane.append(el('div', 'placeholder-sub',
-          'לוח ייחוס נבנה מסוג דמות מהספרייה. לסוג חופשי — הוסף תכונות והחל על הטופס.'));
+          'לוח ייחוס נבנה מסוג דמות מהספרייה. לסוג חופשי: הוסף תכונות והחל על הטופס.'));
         return;
       }
       stepPane.append(el('div', 'panel-label', 'אילו מבטים ייכנסו ללוח?'));
@@ -4574,7 +4574,7 @@ function initIdentity(root, lib, hooks = {}) {
       if (!state.reference || !state.seed) {
         stepPane.append(el('div', 'rule-note',
           'תכונות לבדן נותנות עקביות חלקית. בלי קובץ רפרנס ובלי seed קבוע, '
-          + 'פריים שני לא יהיה אותה דמות בדיוק — זה נאמר כאן בקול כי שלב '
+          + 'פריים שני לא יהיה אותה דמות בדיוק, וזה נאמר כאן בקול כי שלב '
           + 'הלוח קיים בדיוק בשביל זה.'));
       }
     },
@@ -4776,7 +4776,7 @@ function initExamples(container, lib, hooks = {}) {
     chipDof.textContent = dof
       ? (dof.far_cm === null ? `DOF ${dof.near_cm}cm - INF`
                              : `DOF ${dof.total_cm}cm SHARP`)
-      : 'DOF —';
+      : 'DOF -';
   }
 
   render();
@@ -4888,18 +4888,18 @@ function initExplain(container, lib) {
       'הפרוזה איננה טקסט חופשי. לכל פרומפט אותם סעיפים, באותו סדר, כל אחד '
       + 'עם תפקיד אחד. אלה הסעיפים של "פורטרט באור חלון", מקומפלים עכשיו:');
     const HE = {
-      subject: 'הנושא — המשפט הפותח',
-      moment: 'MOMENT — גוף, מבט, ידיים, שאריות הפעולה',
-      set: 'SET — רקע, משטח, אביזרים',
-      composition: 'FRAMING — פריסת הפריים',
-      lighting_plot: 'LIGHTING PLOT — מה כל מקור עושה',
-      consequences: 'WHAT THE LIGHT DOES — התוצאות הפיזיקליות',
-      materials: 'MATERIALS — איך כל חומר מתנהג באור',
-      camera: 'CAMERA — פורמט, עדשה, צמצם ועומק שדה מחושב',
-      capture_character: 'CAPTURE CHARACTER — חתימת האופטיקה והחיישן',
-      imperfections: 'IMPERFECTIONS TO KEEP — הפגמים שנשארים',
-      grade: 'GRADE — הצבע והקונטרסט',
-      negative: 'DO NOT PRODUCE — מה אסור שיקרה',
+      subject: 'הנושא: המשפט הפותח',
+      moment: 'MOMENT: גוף, מבט, ידיים, שאריות הפעולה',
+      set: 'SET: רקע, משטח, אביזרים',
+      composition: 'FRAMING: פריסת הפריים',
+      lighting_plot: 'LIGHTING PLOT: מה כל מקור עושה',
+      consequences: 'WHAT THE LIGHT DOES: התוצאות הפיזיקליות',
+      materials: 'MATERIALS: איך כל חומר מתנהג באור',
+      camera: 'CAMERA: פורמט, עדשה, צמצם ועומק שדה מחושב',
+      capture_character: 'CAPTURE CHARACTER: חתימת האופטיקה והחיישן',
+      imperfections: 'IMPERFECTIONS TO KEEP: הפגמים שנשארים',
+      grade: 'GRADE: הצבע והקונטרסט',
+      negative: 'DO NOT PRODUCE: מה אסור שיקרה',
     };
     const ir = PM.buildIR(PM.normalizeSpec(spec), lib);
     for (const [name, text] of PM.proseSections(ir)) {
@@ -4937,7 +4937,7 @@ function initExplain(container, lib) {
       mono(result,
         `sharp zone ${dof.near_cm}cm to ${dof.far_cm === null ? 'infinity' : `${dof.far_cm}cm`}`
         + (dof.total_cm !== null && dof.far_cm !== null
-          ? ` — ${dof.total_cm}cm deep` : ''));
+          ? `, ${dof.total_cm}cm deep` : ''));
       result.append(el('p', 'section-hint',
         'המספר הזה נכנס למשפט המצלמה בפרומפט. מודל שמקבל "אזור חדות של '
         + 'סנטימטרים בודדים" מצייר אופטיקה אמיתית במקום טשטוש דקורטיבי.'));
@@ -4950,7 +4950,7 @@ function initExplain(container, lib) {
     const pane = panes[3];
     hint(pane,
       'כלל ברזל: שום שם ציוד תאורה לא מגיע לפרומפט. מודל שמקבל "סטריפבוקס" '
-      + 'מצייר סטריפבוקס בתוך הפריים. הציוד נשאר במפרט, בסקיצה ובממשק — '
+      + 'מצייר סטריפבוקס בתוך הפריים. הציוד נשאר במפרט, בסקיצה ובממשק, '
       + 'ולמודל נוסעים רק הכיוון, הגובה, המרחק, היחס ומה שהאור עושה לצל, '
       + 'לעין ולהשתקפות. זה הריג של "מוצר על אקריל שחור" כפי שאתם רואים אותו:');
     const rig = PM.resolveRig(rigSpec.rig, lib);
@@ -4985,7 +4985,7 @@ function initExplain(container, lib) {
     hint(pane,
       'הממשק בעברית, הפרומפט באנגלית, ועברית לעולם לא מגיעה למודל. טקסט '
       + 'חופשי עובר דרך לקסיקון של המערכת: סמיכות מתהפכת, תואר עובר לפני שם '
-      + 'העצם, ומילה שהלקסיקון לא מכיר מדווחת ומושמטת — לא מנוחשת. נסו:');
+      + 'העצם, ומילה שהלקסיקון לא מכיר מדווחת ומושמטת, לא מנוחשת. נסו:');
     const input = document.createElement('input');
     input.type = 'text';
     input.className = 'free-text';
@@ -4996,7 +4996,7 @@ function initExplain(container, lib) {
     const run = () => {
       out.innerHTML = '';
       const result = PM.translateHe(input.value, lib);
-      mono(out, result.text || '—');
+      mono(out, result.text || '-');
       if (result.unknown.length) {
         out.append(el('p', 'rule-note',
           `מילים שהלקסיקון לא מכיר ולכן הושמטו: ${result.unknown.join(', ')}`));
@@ -5010,7 +5010,7 @@ function initExplain(container, lib) {
   {
     const pane = panes[5];
     hint(pane,
-      'למידג׳רני יש תקציב של 320 תווים. תקציב לא חותך טקסט באמצע משפט — הוא '
+      'למידג׳רני יש תקציב של 320 תווים. תקציב לא חותך טקסט באמצע משפט: הוא '
       + 'מוריד סעיפים שלמים לפי סדר ויתור קבוע, והנושא, תוכנית התאורה, מה '
       + 'שהאור עושה והמצלמה מוגנים תמיד. בחרו תקציב ותראו מה נשאר מהפורטרט:');
     const seg = el('div', 'segmented');
@@ -5538,7 +5538,7 @@ function initAuth(container, lib, hooks = {}) {
     list.innerHTML = '';
     if (!rows.length) {
       list.append(el('p', 'section-hint',
-        'עוד אין עבודות שמורות. בטופס המקצועי — "שמירה בענן".'));
+        'עוד אין עבודות שמורות. בטופס המקצועי: "שמירה בענן".'));
     }
     for (const row of rows) {
       const item = el('div', 'auth-work-row');
@@ -5585,7 +5585,7 @@ function initAuth(container, lib, hooks = {}) {
     header.append(el('span', 'panel-title', 'שמירה בענן'));
     panel.append(header);
     panel.append(el('p', 'section-hint',
-      'שם קיים נדרס — כך שומרים גרסה מעודכנת של אותה עבודה.'));
+      'שם קיים נדרס, כך שומרים גרסה מעודכנת של אותה עבודה.'));
 
     const input = el('input', 'free-text');
     input.maxLength = 80;
@@ -5680,7 +5680,7 @@ if (typeof globalThis !== 'undefined') {
   globalThis.PM = Object.assign(globalThis.PM || {}, AUTH);
 }
 
-/* Prompt Machine — "בנק פרומפטים לשימוש": ready prompts the teacher curates
+/* Prompt Machine, "בנק פרומפטים לשימוש": ready prompts the teacher curates
    in the backoffice, each optionally carrying an example image. Students
    read; only the admin writes — enforced by RLS, not by this file. */
 'use strict';
@@ -5703,7 +5703,7 @@ function initBank(container, lib, authApi) {
   panel.append(header);
 
   panel.append(el('p', 'section-hint',
-    'פרומפטים מוכנים מהמרצה, להעתקה ולשימוש כמו שהם — או כנקודת פתיחה. '
+    'פרומפטים מוכנים מהמרצה, להעתקה ולשימוש כמו שהם, או כנקודת פתיחה. '
     + 'כשמצורפת תמונת דוגמה, היא נוצרה מהפרומפט שלצידה.'));
 
   const list = el('div', 'bank-list');
