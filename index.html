@@ -1073,6 +1073,17 @@ button { font-family: inherit; cursor: pointer; }
   border: 1px solid var(--border-mid);
 }
 
+/* the admin's doorway, visible on the gate itself */
+.gate-admin-card {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 14px 26px;
+  background: var(--surface-2);
+  border: 1px solid var(--cyan-border);
+  border-radius: var(--r-tile);
+  box-shadow: 0 0 14px var(--cyan-glow);
+}
+.gate-admin-card .gate-card-label { font-size: 15px; }
+
 </style>
 </head>
 <body>
@@ -1149,6 +1160,14 @@ button { font-family: inherit; cursor: pointer; }
       <button class="gate-link" data-goto="examples">ספריית הדוגמאות — 13 עבודות גמורות להעתקה</button>
       <span class="gate-link-sep" aria-hidden="true">·</span>
       <button class="gate-link" data-goto="explain">איך זה עובד</button>
+      <span class="gate-link-sep" data-bank-btn hidden aria-hidden="true">·</span>
+      <button class="gate-link" data-goto="bank" data-bank-btn hidden>בנק פרומפטים לשימוש</button>
+    </div>
+    <div class="gate-links" data-admin-btn hidden>
+      <button class="gate-card gate-admin-card" data-goto="admin">
+        <span class="gate-card-label">ניהול — בק-אופיס למרצה</span>
+        <span class="gate-card-sub">תלמידים, חסימות, ובנק הפרומפטים</span>
+      </button>
     </div>
   </main>
 
@@ -6064,10 +6083,12 @@ function setMode(name) {
 }
 
 function syncRoleButtons() {
-  const bankBtn = document.querySelector('[data-bank-btn]');
-  const adminBtn = document.querySelector('[data-admin-btn]');
-  if (bankBtn) bankBtn.hidden = !authApi.enabled;
-  if (adminBtn) adminBtn.hidden = !authApi.isAdmin;
+  for (const btn of document.querySelectorAll('[data-bank-btn]')) {
+    btn.hidden = !authApi.enabled;
+  }
+  for (const btn of document.querySelectorAll('[data-admin-btn]')) {
+    btn.hidden = !authApi.isAdmin;
+  }
 }
 
 document.addEventListener('click', (event) => {
