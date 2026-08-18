@@ -1128,6 +1128,78 @@ button { font-family: inherit; cursor: pointer; }
   padding: 26px 30px;
 }
 
+/* ---------------------------------------------------------------------
+   Reference photograph: measured in the browser, never uploaded
+   --------------------------------------------------------------------- */
+
+.ref-drop {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: 30px 20px;
+  margin: 6px 0 16px;
+  background: var(--surface-2);
+  border: 1px dashed var(--border-dashed);
+  border-radius: var(--r-tile);
+  cursor: pointer;
+  transition: border-color .15s, background .15s;
+}
+.ref-drop:hover, .ref-drop.over {
+  border-color: var(--cyan-border);
+  background: var(--cyan-tint);
+}
+.ref-drop-title { font-size: 14.5px; font-weight: 600; color: var(--text-primary); }
+.ref-drop-sub { font-size: 12px; color: var(--text-muted); }
+
+.ref-layout {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 18px;
+  align-items: start;
+  margin-bottom: 8px;
+}
+@media (max-width: 900px) { .ref-layout { grid-template-columns: 1fr; } }
+
+.ref-thumb {
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid var(--border-mid);
+  display: block;
+}
+.ref-palette { display: flex; gap: 5px; margin-top: 8px; }
+.ref-swatch {
+  width: 100%; height: 26px;
+  border-radius: 6px;
+  border: 1px solid var(--border-subtle);
+  cursor: help;
+}
+.ref-strip { flex-wrap: wrap; gap: 6px; }
+.ref-strip .summary-cell { min-width: 104px; }
+
+.ref-offers {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin: 8px 0 14px;
+}
+@media (max-width: 1100px) { .ref-offers { grid-template-columns: 1fr; } }
+.ref-offer {
+  background: var(--surface-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-tile);
+  padding: 12px 14px;
+  display: flex; flex-direction: column; gap: 6px; align-items: flex-start;
+}
+.ref-offer.applied { border-color: var(--cyan-border); background: var(--cyan-tint); }
+.ref-offer-head {
+  display: flex; align-items: center; justify-content: space-between;
+  width: 100%; gap: 10px;
+}
+.ref-offer-label { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+.ref-offer-detail { font-size: 12.5px; line-height: 1.55; color: var(--text-secondary); margin: 0; }
+.ref-offer-value {
+  font-size: 13px; font-weight: 600; color: var(--cyan-bright);
+  margin: 0;
+}
+
 </style>
 </head>
 <body>
@@ -2529,6 +2601,400 @@ if (typeof globalThis !== 'undefined') {
   globalThis.PM = Object.assign(globalThis.PM || {}, SKETCH);
 }
 
+/* Prompt Machine — reading a reference photograph. Everything here is real
+   photometry done in the browser on the pixels themselves: no model, no API,
+   no upload. The image is read into memory, measured, and dropped; nothing
+   about it is ever serialised into a spec, which is the standing rule.
+
+   What can honestly be measured is measured (aspect, tonal distribution,
+   colour cast, key to fill ratio in real stops, where the light sits,
+   sharpness falloff, noise floor). What cannot be measured from pixels — who
+   is in the picture, what the surfaces are made of — is not guessed at. The
+   analysis fills the physics; the photographer still writes the picture.
+
+   analyzePixels takes raw RGBA and stays free of the DOM, so the whole
+   engine is testable in node against synthetic frames. */
+'use strict';
+
+const COMMON_RATIOS = [
+  ['1:1', 1], ['5:4', 1.25], ['4:3', 4 / 3], ['3:2', 1.5],
+  ['16:9', 16 / 9], ['2:1', 2],
+  ['4:5', 0.8], ['3:4', 0.75], ['2:3', 2 / 3], ['9:16', 0.5625],
+];
+
+const RATIO_STOPS = [
+  ['1:1', 0], ['2:1', 1], ['3:1', 1.585], ['4:1', 2],
+  ['5:1', 2.322], ['6:1', 2.585], ['8:1', 3], ['16:1', 4],
+];
+
+function srgbToLinear(v) {
+  const c = v / 255;
+  return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+}
+
+/* gamma-space luma for histograms and framing decisions */
+const luma = (r, g, b) => 0.2126 * r + 0.7152 * g + 0.0722 * b;
+/* linear luminance: the only correct basis for a ratio in stops */
+const linear = (r, g, b) => 0.2126 * srgbToLinear(r)
+  + 0.7152 * srgbToLinear(g) + 0.0722 * srgbToLinear(b);
+
+function nearest(table, value) {
+  let best = table[0];
+  let bestGap = Infinity;
+  for (const entry of table) {
+    const gap = Math.abs(entry[1] - value);
+    if (gap < bestGap) { bestGap = gap; best = entry; }
+  }
+  return best[0];
+}
+
+function percentile(hist, total, fraction) {
+  let seen = 0;
+  const target = total * fraction;
+  for (let i = 0; i < hist.length; i += 1) {
+    seen += hist[i];
+    if (seen >= target) return i;
+  }
+  return 255;
+}
+
+function rgbToHsl(r, g, b) {
+  const rn = r / 255; const gn = g / 255; const bn = b / 255;
+  const max = Math.max(rn, gn, bn); const min = Math.min(rn, gn, bn);
+  const l = (max + min) / 2;
+  const d = max - min;
+  if (!d) return [0, 0, l * 100];
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  let h;
+  if (max === rn) h = ((gn - bn) / d + (gn < bn ? 6 : 0));
+  else if (max === gn) h = (bn - rn) / d + 2;
+  else h = (rn - gn) / d + 4;
+  return [h * 60, s * 100, l * 100];
+}
+
+const HUE_NAMES = [
+  [15, 'אדום'], [40, 'כתום'], [65, 'צהוב'], [160, 'ירוק'],
+  [200, 'טורקיז'], [250, 'כחול'], [290, 'סגול'], [345, 'ורוד'], [361, 'אדום'],
+];
+
+function colourNameHe(r, g, b) {
+  const [h, s, l] = rgbToHsl(r, g, b);
+  if (l < 12) return 'שחור';
+  if (l > 92 && s < 12) return 'לבן';
+  if (s < 12) return l > 55 ? 'אפור בהיר' : 'אפור כהה';
+  let name = 'אדום';
+  for (const [limit, label] of HUE_NAMES) {
+    if (h < limit) { name = label; break; }
+  }
+  const shade = l < 32 ? 'כהה' : (l > 72 ? 'בהיר' : '');
+  const muted = s < 30 ? 'עמום' : '';
+  return [name, shade, muted].filter(Boolean).join(' ');
+}
+
+const hex = (r, g, b) => '#' + [r, g, b]
+  .map((v) => Math.round(v).toString(16).padStart(2, '0')).join('');
+
+/* ---------------------------------------------------------------------- */
+
+function analyzePixels(data, width, height) {
+  const count = width * height;
+  if (!count) return null;
+
+  const hist = new Array(256).fill(0);
+  const gray = new Float32Array(count);
+  const lin = new Float32Array(count);
+
+  let sumR = 0; let sumG = 0; let sumB = 0;
+  let sumSat = 0;
+  let hiR = 0; let hiB = 0; let hiN = 0;
+  const bucket = new Map(); /* 5 bits per channel, for the palette */
+
+  for (let i = 0, p = 0; i < count; i += 1, p += 4) {
+    const r = data[p]; const g = data[p + 1]; const b = data[p + 2];
+    const y = luma(r, g, b);
+    gray[i] = y;
+    lin[i] = linear(r, g, b);
+    hist[Math.min(255, Math.max(0, Math.round(y)))] += 1;
+    sumR += r; sumG += g; sumB += b;
+    const max = Math.max(r, g, b); const min = Math.min(r, g, b);
+    sumSat += max ? (max - min) / max : 0;
+    /* the light's own colour lives in the upper midtones, not in the paint */
+    if (y > 140 && y < 250) { hiR += r; hiB += b; hiN += 1; }
+    const key = ((r >> 3) << 10) | ((g >> 3) << 5) | (b >> 3);
+    bucket.set(key, (bucket.get(key) || 0) + 1);
+  }
+
+  /* ---- exposure and tonal shape ---- */
+  const meanLuma = (0.2126 * sumR + 0.7152 * sumG + 0.0722 * sumB) / count;
+  const p1 = percentile(hist, count, 0.01);
+  const p5 = percentile(hist, count, 0.05);
+  const p50 = percentile(hist, count, 0.5);
+  const p95 = percentile(hist, count, 0.95);
+  const clippedBlack = (hist[0] + hist[1]) / count;
+  const clippedWhite = (hist[254] + hist[255]) / count;
+
+  let variance = 0;
+  for (let i = 0; i < count; i += 1) variance += (gray[i] - meanLuma) ** 2;
+  const std = Math.sqrt(variance / count);
+
+  let blackPoint;
+  if (clippedBlack > 0.02 && p5 < 12) blackPoint = 'crushed';
+  else if (p1 > 24) blackPoint = 'lifted_charcoal';
+  else blackPoint = 'true_black';
+
+  const key = meanLuma < 78 ? 'low' : (meanLuma > 168 ? 'high' : 'normal');
+
+  /* mid-tone mass separates a soft source from a hard one: hard light
+     empties the middle of the histogram and piles both ends */
+  let mids = 0;
+  for (let i = 64; i < 192; i += 1) mids += hist[i];
+  const midMass = mids / count;
+  const quality = midMass > 0.62 ? 'soft' : (midMass < 0.42 ? 'hard' : 'medium');
+
+  /* ---- where the light sits: the luminance centroid of the subject area -- */
+  const x0 = Math.floor(width * 0.2); const x1 = Math.ceil(width * 0.8);
+  const y0 = Math.floor(height * 0.15); const y1 = Math.ceil(height * 0.85);
+  let wsum = 0; let wx = 0; let wy = 0;
+  let leftLin = 0; let leftN = 0; let rightLin = 0; let rightN = 0;
+  const midX = (x0 + x1) / 2;
+  for (let y = y0; y < y1; y += 1) {
+    for (let x = x0; x < x1; x += 1) {
+      const i = y * width + x;
+      const w = gray[i];
+      wsum += w; wx += w * x; wy += w * y;
+      if (x < midX) { leftLin += lin[i]; leftN += 1; }
+      else { rightLin += lin[i]; rightN += 1; }
+    }
+  }
+  const regionW = x1 - x0; const regionH = y1 - y0;
+  const shiftX = wsum ? ((wx / wsum) - midX) / (regionW / 2) : 0;
+  const shiftY = wsum ? ((wy / wsum) - (y0 + y1) / 2) / (regionH / 2) : 0;
+
+  /* screen-left is camera-left, and the project's azimuth runs positive to
+     camera right, so a brighter left side is a negative azimuth */
+  const azimuth = Math.round(Math.max(-120, Math.min(120, (shiftX / 0.22) * 90)));
+  const elevation = Math.round(Math.max(-40, Math.min(80, (-shiftY / 0.25) * 55)));
+  const dirConfidence = Math.min(1, Math.abs(shiftX) / 0.10);
+  const elevConfidence = Math.min(1, Math.abs(shiftY) / 0.10);
+
+  /* ---- key to fill, in real stops, from linear luminance ---- */
+  const leftMean = leftN ? leftLin / leftN : 0;
+  const rightMean = rightN ? rightLin / rightN : 0;
+  const bright = Math.max(leftMean, rightMean);
+  const dark = Math.min(leftMean, rightMean);
+  const stops = (bright > 0 && dark > 0)
+    ? Math.max(0, Math.min(5, Math.log2(bright / Math.max(dark, 1e-5)))) : 0;
+  const ratio = nearest(RATIO_STOPS, stops);
+
+  /* ---- colour cast: red against blue in the light's own tones ---- */
+  const warmth = hiN ? (hiR / hiN) / Math.max(1, hiB / hiN) : 1;
+  let cast = 'neutral';
+  if (warmth > 1.12) cast = 'warm';
+  else if (warmth < 0.92) cast = 'cool';
+  const kelvin = Math.round(
+    Math.max(2600, Math.min(9000, 5500 / Math.pow(warmth, 1.7))) / 100) * 100;
+
+  /* ---- sharpness: centre against the edges, which is depth of field ---- */
+  const sharpness = (ax0, ay0, ax1, ay1) => {
+    let sum = 0; let n = 0;
+    for (let y = ay0 + 1; y < ay1 - 1; y += 2) {
+      for (let x = ax0 + 1; x < ax1 - 1; x += 2) {
+        const i = y * width + x;
+        const gx = gray[i + 1] - gray[i - 1];
+        const gy = gray[i + width] - gray[i - width];
+        sum += Math.sqrt(gx * gx + gy * gy); n += 1;
+      }
+    }
+    return n ? sum / n : 0;
+  };
+  const centreSharp = sharpness(Math.floor(width * 0.3), Math.floor(height * 0.3),
+    Math.ceil(width * 0.7), Math.ceil(height * 0.7));
+  const edgeSharp = (
+    sharpness(0, 0, width, Math.floor(height * 0.18))
+    + sharpness(0, Math.ceil(height * 0.82), width, height)) / 2;
+  const focusRatio = edgeSharp > 0.01 ? centreSharp / edgeSharp : 1;
+  const depth = focusRatio > 2.2 ? 'shallow'
+    : (focusRatio < 1.25 ? 'deep' : 'medium');
+
+  /* ---- noise floor: the quietest tiles carry the grain ---- */
+  const tiles = [];
+  const step = Math.max(8, Math.floor(Math.min(width, height) / 12));
+  for (let ty = 0; ty + step < height; ty += step) {
+    for (let tx = 0; tx + step < width; tx += step) {
+      let m = 0; let n = 0;
+      for (let y = ty; y < ty + step; y += 1) {
+        for (let x = tx; x < tx + step; x += 1) { m += gray[y * width + x]; n += 1; }
+      }
+      m /= n;
+      let v = 0;
+      for (let y = ty; y < ty + step; y += 1) {
+        for (let x = tx; x < tx + step; x += 1) {
+          v += (gray[y * width + x] - m) ** 2;
+        }
+      }
+      tiles.push(Math.sqrt(v / n));
+    }
+  }
+  tiles.sort((a, b) => a - b);
+  const noise = tiles.length ? tiles[Math.floor(tiles.length * 0.15)] : 0;
+  const grain = noise > 6 ? 'heavy' : (noise > 2.6 ? 'visible' : 'clean');
+
+  /* ---- palette ---- */
+  const top = [...bucket.entries()].sort((a, b) => b[1] - a[1]).slice(0, 24);
+  const palette = [];
+  for (const [code, n] of top) {
+    const r = ((code >> 10) & 31) * 8 + 4;
+    const g = ((code >> 5) & 31) * 8 + 4;
+    const b = (code & 31) * 8 + 4;
+    const near = palette.find((c) => Math.abs(c.r - r) + Math.abs(c.g - g)
+      + Math.abs(c.b - b) < 60);
+    if (near) { near.share += n / count; continue; }
+    palette.push({ r, g, b, share: n / count });
+    if (palette.length === 5) break;
+  }
+
+  return {
+    aspect: {
+      width, height,
+      value: width / height,
+      nearest: nearest(COMMON_RATIOS, width / height),
+      orientation: width > height * 1.02 ? 'landscape'
+        : (height > width * 1.02 ? 'portrait' : 'square'),
+    },
+    exposure: {
+      mean: Math.round(meanLuma), key,
+      clipped_white_pct: +(clippedWhite * 100).toFixed(1),
+      clipped_black_pct: +(clippedBlack * 100).toFixed(1),
+    },
+    tone: {
+      std: +std.toFixed(1), p1, p5, p50, p95,
+      black_point: blackPoint,
+      spread: p95 - p5,
+    },
+    light: {
+      azimuth_deg: azimuth,
+      elevation_deg: elevation,
+      ratio,
+      stops: +stops.toFixed(2),
+      quality,
+      mid_mass: +midMass.toFixed(2),
+      direction_confidence: +dirConfidence.toFixed(2),
+      elevation_confidence: +elevConfidence.toFixed(2),
+      side: azimuth < -6 ? 'camera_left' : (azimuth > 6 ? 'camera_right' : 'frontal'),
+    },
+    colour: {
+      cast, warmth: +warmth.toFixed(3), kelvin,
+      saturation: +(sumSat / count * 100).toFixed(1),
+      palette: palette.map((c) => ({
+        hex: hex(c.r, c.g, c.b),
+        name: colourNameHe(c.r, c.g, c.b),
+        share: +(c.share * 100).toFixed(1),
+      })),
+    },
+    focus: {
+      centre: +centreSharp.toFixed(2),
+      edge: +edgeSharp.toFixed(2),
+      ratio: +focusRatio.toFixed(2),
+      depth,
+    },
+    grain: { noise: +noise.toFixed(2), level: grain },
+  };
+}
+
+/* ---------------------------------------------------------------------- */
+/* Turning measurements into spec values. Nothing is applied on its own:
+   each entry is an offer the photographer accepts or ignores, which is the
+   same rule as everywhere else in the tool. */
+
+const SATURATION_TEXT = (s) => (s < 12
+  ? 'near monochrome, colour barely present'
+  : (s < 26 ? 'restrained, colour held well back'
+    : (s < 45 ? 'natural, colour present without shouting'
+      : 'strong colour, the palette carrying the frame')));
+
+const CONTRAST_TEXT = (report) => {
+  const { std, spread } = report.tone;
+  if (spread > 215 && std > 62) {
+    return 'steep, the tones running the full scale with short shoulders';
+  }
+  if (std > 48) return 'firm S curve, midtones separated, highlights rolling off';
+  if (std < 28) return 'flat and low contrast, the scale held in the midtones';
+  return 'gentle S, shadows open and highlights held short of clipping';
+};
+
+const GRAIN_LEVEL = { clean: 'clean_commercial', visible: 'editorial', heavy: 'documentary' };
+
+function suggestSpec(report, lib) {
+  const out = [];
+  const add = (path, value, label, detail, confidence) => out.push(
+    { path, value, label, detail, confidence });
+
+  add('camera.aspect_ratio', report.aspect.nearest, 'יחס תמונה',
+    `נמדד ${report.aspect.width}x${report.aspect.height} פיקסל`, 1);
+
+  add('grade.black_point', report.tone.black_point, 'נקודת שחור',
+    `האחוזון התחתון על ${report.tone.p1}, ` +
+    `${report.exposure.clipped_black_pct}% מהפיקסלים בשחור מלא`, 0.9);
+
+  add('grade.contrast_curve', CONTRAST_TEXT(report), 'עקומת קונטרסט',
+    `סטיית תקן ${report.tone.std}, טווח ${report.tone.spread} רמות`, 0.75);
+
+  add('grade.saturation', SATURATION_TEXT(report.colour.saturation), 'רוויה',
+    `רוויה ממוצעת ${report.colour.saturation}%`, 0.8);
+
+  if (report.colour.cast !== 'neutral') {
+    add('grade.white_balance_k', report.colour.kelvin, 'טמפרטורת צבע',
+      `נטייה ${report.colour.cast === 'warm' ? 'חמה' : 'קרה'} ` +
+      `ביחס אדום לכחול של ${report.colour.warmth}`, 0.6);
+  }
+
+  /* paths are the form's authoring shape: that form is the only consumer */
+  add('realism.level', GRAIN_LEVEL[report.grain.level] || 'editorial', 'רמת ריאליזם',
+    `רעש ברצפת התמונה ${report.grain.noise}, ${
+      { clean: 'נקי', visible: 'גריין נראה', heavy: 'גריין כבד' }[report.grain.level]}`,
+    0.55);
+
+  add('rig.ratio', report.light.ratio, 'יחס מפתח למילוי',
+    `${report.light.stops} סטופים בין הצד המואר לצד הצל, נמדד באור ליניארי`,
+    0.7);
+
+  /* the closest rig in the library, scored on what was actually measured */
+  const wanted = report.light;
+  let bestKey = null; let bestScore = Infinity;
+  for (const [presetKey, preset] of Object.entries(lib.lighting)) {
+    if (presetKey.startsWith('_') || !preset.lights) continue;
+    const keyLight = preset.lights.find((l) => l.role === 'key');
+    if (!keyLight) continue;
+    const stopsOf = (text) => {
+      const entry = RATIO_STOPS.find(([name]) => name === text);
+      return entry ? entry[1] : 2;
+    };
+    const dAz = Math.abs(Math.abs(keyLight.azimuth_deg) - Math.abs(wanted.azimuth_deg)) / 90;
+    const dSide = (keyLight.azimuth_deg < 0) === (wanted.azimuth_deg < 0) ? 0 : 0.25;
+    const dEl = Math.abs((keyLight.elevation_deg || 0) - wanted.elevation_deg) / 60;
+    const dRatio = Math.abs(stopsOf(preset.key_to_fill_ratio) - wanted.stops) / 3;
+    const score = dAz + dSide + dEl * 0.8 + dRatio;
+    if (score < bestScore) { bestScore = score; bestKey = presetKey; }
+  }
+  if (bestKey) {
+    const sideHe = { camera_left: 'משמאל למצלמה', camera_right: 'מימין למצלמה',
+                     frontal: 'חזיתי' }[wanted.side];
+    add('rig.preset', bestKey, 'ריג קרוב מהספרייה',
+      `${lib.lighting[bestKey].label}. נמדד אור ${sideHe}, ` +
+      `אזימוט ${wanted.azimuth_deg}°, גובה ${wanted.elevation_deg}°, ` +
+      `${wanted.quality === 'soft' ? 'רך' : (wanted.quality === 'hard' ? 'קשה' : 'בינוני')}`,
+      Math.min(0.65, wanted.direction_confidence));
+  }
+
+  return out;
+}
+
+const REFERENCE = { analyzePixels, suggestSpec, colourNameHe, COMMON_RATIOS, RATIO_STOPS };
+if (typeof module !== 'undefined') module.exports = REFERENCE;
+if (typeof globalThis !== 'undefined') {
+  globalThis.PM = Object.assign(globalThis.PM || {}, REFERENCE);
+}
+
 /* Prompt Machine — the shared output pane: dialect tabs, validation pill,
    live prompt, meta chips, copy. Used by the quick path and the pro form so
    the two can never drift apart in behaviour. */
@@ -3607,6 +4073,16 @@ function initForm(root, lib, hooks = {}) {
   const explainToggle = globalThis.PM.explainToggle;
 
   const GROUP_EXPLAIN = {
+    reference: () => [{
+      what: 'מדידה אמיתית של צילום רפרנס, בתוך הדפדפן. המערכת קוראת את '
+        + 'הפיקסלים ומחשבת יחס תמונה, נקודת שחור, קונטרסט, רוויה, נטיית צבע, '
+        + 'יחס מפתח למילוי בסטופים, כיוון האור, עומק שדה וגריין.',
+      do: 'מה שנמדד מוצע לך, ואתה מחליט מה להחיל. מה שאי אפשר למדוד '
+        + 'מפיקסלים, כלומר מי בתמונה ומאיזה חומר עשוי כל דבר, המערכת לא '
+        + 'מנחשת: את זה אתה כותב.',
+      why: 'התמונה נקראת לזיכרון ונמדדת בלבד. היא לא עולה לשום שרת, לא '
+        + 'נשמרת, ולא נכנסת למפרט.',
+    }],
     basis: () => [help._groups.basis, help._groups.subject],
     moment: () => [help._groups.moment],
     set: () => [help._groups.set, help._groups.composition],
@@ -3631,6 +4107,7 @@ function initForm(root, lib, hooks = {}) {
   /* ----------------------------------------------------------- groups -- */
 
   const GROUPS = [
+    ['reference', 'צילום רפרנס'],
     ['basis', 'בסיס ונושא'],
     ['moment', 'הרגע'],
     ['set', 'סט וקומפוזיציה'],
@@ -3660,7 +4137,222 @@ function initForm(root, lib, hooks = {}) {
     });
   }
 
+  /* ---- reading a reference photograph, in the browser, on the pixels ---- */
+
+  let refReport = null;
+  let refUrl = null;
+  const refApplied = new Set();
+  let refError = '';
+
+  const BLACK_POINT_HE = {
+    true_black: 'שחור אמיתי', lifted_charcoal: 'שחור מורם', crushed: 'שחור מרוסק',
+  };
+  const QUALITY_HE = { soft: 'רך', medium: 'בינוני', hard: 'קשה' };
+  const DEPTH_HE = { shallow: 'רדוד', medium: 'בינוני', deep: 'עמוק' };
+  const GRAIN_HE = { clean: 'נקי', visible: 'נראה לעין', heavy: 'כבד' };
+  const CAST_HE = { warm: 'חמה', neutral: 'ניטרלית', cool: 'קרה' };
+  const SIDE_HE = {
+    camera_left: 'משמאל למצלמה', camera_right: 'מימין למצלמה', frontal: 'חזיתי',
+  };
+
+  function readReference(file) {
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        /* a working copy: big enough to keep the grain honest, small enough
+           to measure instantly. smoothing off, or the noise floor is lost. */
+        const max = 1000;
+        const scale = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+        const w = Math.max(2, Math.round(img.naturalWidth * scale));
+        const h = Math.max(2, Math.round(img.naturalHeight * scale));
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(img, 0, 0, w, h);
+        const pixels = ctx.getImageData(0, 0, w, h);
+        const report = globalThis.PM.analyzePixels(pixels.data, w, h);
+        /* the frame's real size is the original's, not the working copy's */
+        report.aspect.width = img.naturalWidth;
+        report.aspect.height = img.naturalHeight;
+        report.aspect.value = img.naturalWidth / img.naturalHeight;
+        let best = globalThis.PM.COMMON_RATIOS[0];
+        for (const entry of globalThis.PM.COMMON_RATIOS) {
+          if (Math.abs(entry[1] - report.aspect.value)
+              < Math.abs(best[1] - report.aspect.value)) best = entry;
+        }
+        report.aspect.nearest = best[0];
+        resolve({ report, url });
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('image')); };
+      img.src = url;
+    });
+  }
+
   const RENDERERS = {
+    reference() {
+      const intro = el('p', 'section-hint',
+        'ברוב העבודות מתחילים מצילום רפרנס. גררו אותו לכאן, והמערכת תמדוד '
+        + 'ממנו את מה שאפשר למדוד ותציע למלא בו את המפרט. הצילום נקרא '
+        + 'לזיכרון בלבד: הוא לא עולה לשום שרת ולא נשמר.');
+      groupPane.append(intro);
+
+      const fileIn = el('input');
+      fileIn.type = 'file';
+      fileIn.accept = 'image/*';
+      fileIn.hidden = true;
+      groupPane.append(fileIn);
+
+      const drop = el('div', 'ref-drop');
+      drop.append(el('span', 'ref-drop-title', 'גררו לכאן צילום, או לחצו לבחירה'));
+      drop.append(el('span', 'ref-drop-sub', 'JPG, PNG או WEBP'));
+      drop.addEventListener('click', () => fileIn.click());
+      ['dragenter', 'dragover'].forEach((name) => drop.addEventListener(name, (e) => {
+        e.preventDefault(); drop.classList.add('over');
+      }));
+      ['dragleave', 'drop'].forEach((name) => drop.addEventListener(name, (e) => {
+        e.preventDefault(); drop.classList.remove('over');
+      }));
+
+      const take = async (file) => {
+        if (!file || !file.type.startsWith('image/')) {
+          refError = 'זה לא קובץ תמונה'; render(); return;
+        }
+        try {
+          const { report, url } = await readReference(file);
+          if (refUrl) URL.revokeObjectURL(refUrl);
+          refReport = report; refUrl = url; refError = '';
+          refApplied.clear();
+        } catch {
+          refError = 'לא הצלחנו לקרוא את התמונה';
+        }
+        render();
+      };
+      drop.addEventListener('drop', (e) => take(e.dataTransfer.files[0]));
+      fileIn.addEventListener('change', () => take(fileIn.files[0]));
+      groupPane.append(drop);
+
+      if (refError) groupPane.append(el('p', 'rule-note', refError));
+      if (!refReport) return;
+
+      const r = refReport;
+      const layout2 = el('div', 'ref-layout');
+      groupPane.append(layout2);
+
+      /* what was seen */
+      const seen = el('div', 'ref-seen');
+      const thumb = el('img', 'ref-thumb');
+      thumb.src = refUrl;
+      thumb.alt = 'צילום הרפרנס';
+      seen.append(thumb);
+
+      const swatches = el('div', 'ref-palette');
+      for (const colour of r.colour.palette) {
+        const chip = el('span', 'ref-swatch');
+        chip.style.background = colour.hex;
+        globalThis.PM.attachPopover(chip, {
+          title: colour.name,
+          lines: [{ text: `${colour.share}% מהפריים`, mono: false },
+                  { text: colour.hex, mono: true }],
+        });
+        swatches.append(chip);
+      }
+      seen.append(swatches);
+      layout2.append(seen);
+
+      /* what was measured */
+      const measured = el('div', 'ref-measured');
+      const chip = (caption, value) => {
+        const cell = el('div', 'summary-cell');
+        cell.append(el('span', 'summary-caption', caption));
+        cell.append(el('span', 'summary-value', value));
+        return cell;
+      };
+      const strip = el('div', 'summary-strip ref-strip');
+      strip.append(chip('יחס', r.aspect.nearest));
+      strip.append(chip('חשיפה', { low: 'לואו קי', normal: 'רגילה',
+        high: 'היי קי' }[r.exposure.key]));
+      strip.append(chip('נקודת שחור', BLACK_POINT_HE[r.tone.black_point]));
+      strip.append(chip('אור', SIDE_HE[r.light.side]));
+      strip.append(chip('יחס מפתח', `${r.light.ratio} · ${r.light.stops} סטופים`));
+      strip.append(chip('איכות האור', QUALITY_HE[r.light.quality]));
+      strip.append(chip('אזימוט', `${r.light.azimuth_deg}°`));
+      strip.append(chip('גובה', `${r.light.elevation_deg}°`));
+      strip.append(chip('טמפרטורה', `${CAST_HE[r.colour.cast]} · ${r.colour.kelvin}K`));
+      strip.append(chip('עומק שדה', DEPTH_HE[r.focus.depth]));
+      strip.append(chip('גריין', GRAIN_HE[r.grain.level]));
+      strip.append(chip('רוויה', `${r.colour.saturation}%`));
+      measured.append(strip);
+      layout2.append(measured);
+
+      /* what it offers to fill */
+      groupPane.append(sectionLabel('מה נמדד, ומה אפשר למלא ממנו'));
+      const offers = globalThis.PM.suggestSpec(r, lib);
+      const readable = (offer) => {
+        if (offer.path === 'rig.preset') {
+          return (lib.lighting[offer.value] || {}).label || offer.value;
+        }
+        if (offer.path === 'realism.level') {
+          return labels.realism_level[offer.value] || offer.value;
+        }
+        if (offer.path === 'grade.black_point') {
+          return BLACK_POINT_HE[offer.value] || offer.value;
+        }
+        return String(offer.value);
+      };
+      const applyOne = (offer) => {
+        set(offer.path, offer.value);
+        refApplied.add(offer.path);
+      };
+
+      const list = el('div', 'ref-offers');
+      for (const offer of offers) {
+        const card = el('div', 'ref-offer'
+          + (refApplied.has(offer.path) ? ' applied' : ''));
+        const head = el('div', 'ref-offer-head');
+        head.append(el('span', 'ref-offer-label', offer.label));
+        const conf = el('span', 'chip-meta',
+          `${Math.round(offer.confidence * 100)}%`);
+        globalThis.PM.attachPopover(conf, {
+          title: 'כמה המדידה בטוחה',
+          lines: [{ text: 'יחס תמונה נמדד ודאי. כיוון האור ורמת הריאליזם הם '
+            + 'הערכה מהפיקסלים, ולכן אחוז נמוך יותר.' }],
+        });
+        head.append(conf);
+        card.append(head);
+        card.append(el('p', 'ref-offer-detail', offer.detail));
+        card.append(el('p', 'ref-offer-value', readable(offer)));
+        const btn = el('button', 'btn-ghost',
+          refApplied.has(offer.path) ? 'הוחל ✓' : 'החלה');
+        btn.addEventListener('click', () => { applyOne(offer); render(); });
+        card.append(btn);
+        list.append(card);
+      }
+      groupPane.append(list);
+
+      const row = el('div', 'button-row');
+      const all = el('button', 'btn-run', 'החלת כל המדידות');
+      all.addEventListener('click', () => {
+        offers.forEach(applyOne);
+        render();
+      });
+      const clear = el('button', 'btn-ghost', 'הסרת הרפרנס');
+      clear.addEventListener('click', () => {
+        if (refUrl) URL.revokeObjectURL(refUrl);
+        refReport = null; refUrl = null; refApplied.clear();
+        render();
+      });
+      row.append(all, clear);
+      groupPane.append(row);
+
+      groupPane.append(el('p', 'rule-note',
+        'מה שלא נמדד מפיקסלים אינו מנוחש: מי בתמונה, מאיזה חומר עשוי כל דבר, '
+        + 'ומה קורה ברגע הזה נשארים שלך, בטאבים הבאים. ואם ברפרנס יש אדם '
+        + 'אמיתי, המערכת לא משחזרת אותו: הכלל שאין דמיון לאדם מזוהה עומד '
+        + 'בעינו גם כאן.'));
+    },
+
     basis() {
       /* an optional authored starting point; blank stays blank until asked */
       const template = el('select', 'field-select');
