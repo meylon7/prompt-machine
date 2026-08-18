@@ -1084,6 +1084,13 @@ button { font-family: inherit; cursor: pointer; }
 }
 .gate-admin-card .gate-card-label { font-size: 15px; }
 
+.bank-variant-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin: 10px 0 6px;
+}
+.bank-variant-head .btn-run { padding: 7px 16px; font-size: 12px; }
+.bank-card-prompt + .bank-variant-head { margin-top: 14px; }
+
 </style>
 </head>
 <body>
@@ -5687,26 +5694,48 @@ function initBank(container, lib, authApi) {
       const body = el('div', 'bank-card-body');
       body.append(el('h3', 'bank-card-title', row.title));
       if (row.notes) body.append(el('p', 'bank-card-notes', row.notes));
-      const promptBox = el('pre', 'prompt-box mono bank-card-prompt');
-      promptBox.textContent = row.body;
-      body.append(promptBox);
 
-      const copyBtn = el('button', 'btn-run bank-copy', 'העתקת הפרומפט');
-      copyBtn.addEventListener('click', async () => {
-        try {
-          await navigator.clipboard.writeText(row.body);
-        } catch {
-          const area = document.createElement('textarea');
-          area.value = row.body;
-          document.body.append(area);
-          area.select();
-          document.execCommand('copy');
-          area.remove();
+      const copyButton = (text, label) => {
+        const btn = el('button', 'btn-run bank-copy', label);
+        btn.addEventListener('click', async () => {
+          try {
+            await navigator.clipboard.writeText(text);
+          } catch {
+            const area = document.createElement('textarea');
+            area.value = text;
+            document.body.append(area);
+            area.select();
+            document.execCommand('copy');
+            area.remove();
+          }
+          btn.textContent = 'הועתק ✓';
+          setTimeout(() => { btn.textContent = label; }, 1400);
+        });
+        return btn;
+      };
+
+      /* a body may carry several model variants, one per [Label] section;
+         a plain body renders as a single prompt with a single copy button */
+      const sections = row.body.split(/^\[([^\]\n]{1,40})\]\s*$/m);
+      if (sections.length > 1 && !sections[0].trim()) {
+        for (let i = 1; i < sections.length; i += 2) {
+          const label = sections[i].trim();
+          const text = (sections[i + 1] || '').trim();
+          if (!text) continue;
+          const head = el('div', 'bank-variant-head');
+          head.append(el('span', 'chip-meta', label));
+          head.append(copyButton(text, 'העתקה'));
+          body.append(head);
+          const promptBox = el('pre', 'prompt-box mono bank-card-prompt');
+          promptBox.textContent = text;
+          body.append(promptBox);
         }
-        copyBtn.textContent = 'הועתק ✓';
-        setTimeout(() => { copyBtn.textContent = 'העתקת הפרומפט'; }, 1400);
-      });
-      body.append(copyBtn);
+      } else {
+        const promptBox = el('pre', 'prompt-box mono bank-card-prompt');
+        promptBox.textContent = row.body;
+        body.append(promptBox);
+        body.append(copyButton(row.body, 'העתקת הפרומפט'));
+      }
       card.append(body);
 
       if (row.image_path) {
