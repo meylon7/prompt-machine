@@ -1091,6 +1091,43 @@ button { font-family: inherit; cursor: pointer; }
 .bank-variant-head .btn-run { padding: 7px 16px; font-size: 12px; }
 .bank-card-prompt + .bank-variant-head { margin-top: 14px; }
 
+/* ---------------------------------------------------------------------
+   Raised panels: every framed surface breathes and carries depth
+   --------------------------------------------------------------------- */
+
+.panel {
+  background: linear-gradient(180deg, var(--surface-top) 0%, var(--surface-1) 52%);
+  border: 1px solid var(--border-mid);
+  border-top-color: var(--border-strong);
+  box-shadow:
+    0 24px 50px rgba(0, 0, 0, 0.5),
+    0 3px 10px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(233, 238, 245, 0.06);
+}
+
+.view .panel:not(.quick-output) {
+  padding: 26px 30px;
+}
+.view .panel:not(.quick-output) > .panel-header { padding: 0 0 18px; }
+
+.quick-output { padding: 0 20px 20px; }
+
+.auth-work-panel { padding: 26px 30px; }
+.auth-work-panel > .panel-header { padding: 0 0 14px; }
+
+/* the question side of the quick path and the pro form: same treatment */
+.quick-questions {
+  background: linear-gradient(180deg, var(--surface-top) 0%, var(--surface-1) 52%);
+  border: 1px solid var(--border-mid);
+  border-top-color: var(--border-strong);
+  border-radius: var(--r-panel);
+  box-shadow:
+    0 24px 50px rgba(0, 0, 0, 0.5),
+    0 3px 10px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(233, 238, 245, 0.06);
+  padding: 26px 30px;
+}
+
 </style>
 </head>
 <body>
