@@ -1014,6 +1014,65 @@ button { font-family: inherit; cursor: pointer; }
 .auth-work-actions { display: flex; gap: 6px; flex: none; }
 .auth-danger { color: #E8887C; }
 
+/* ---------------------------------------------------------------------
+   Prompt bank + backoffice
+   --------------------------------------------------------------------- */
+
+.bank-list { display: flex; flex-direction: column; gap: 14px; }
+.bank-card {
+  display: grid;
+  grid-template-columns: 1fr 280px;
+  gap: 18px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-tile);
+  padding: 18px;
+}
+.bank-card:has(.bank-card-figure:empty),
+.bank-card:not(:has(.bank-card-figure)) { grid-template-columns: 1fr; }
+@media (max-width: 900px) { .bank-card { grid-template-columns: 1fr; } }
+.bank-card-title {
+  font-size: 17px; font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 6px;
+}
+.bank-card-notes {
+  font-size: 14px; line-height: 1.6;
+  color: var(--text-secondary);
+  margin: 0 0 10px;
+}
+.bank-card-prompt { max-height: 220px; margin-bottom: 10px; }
+.bank-copy { align-self: flex-start; }
+.bank-card-figure { display: flex; align-items: flex-start; }
+.bank-card-image {
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid var(--border-mid);
+}
+
+.admin-tabs { margin-bottom: 16px; }
+.admin-pane { padding-top: 4px; }
+.admin-users { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.admin-user-row.blocked { opacity: 0.6; }
+.admin-chip { color: var(--cyan-bright); border-color: var(--cyan-border); margin-inline-start: 8px; }
+.blocked-chip { color: #E8887C; border-color: rgba(232, 136, 124, 0.4); margin-inline-start: 8px; }
+
+.admin-bank-form {
+  display: flex; flex-direction: column; gap: 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-tile);
+  padding: 16px;
+  margin-top: 12px;
+}
+.admin-bank-body { resize: vertical; min-height: 110px; font-size: 12.5px; }
+.admin-image-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.admin-image-preview {
+  max-height: 72px; max-width: 128px;
+  border-radius: 8px;
+  border: 1px solid var(--border-mid);
+}
+
 </style>
 </head>
 <body>
@@ -1035,7 +1094,9 @@ button { font-family: inherit; cursor: pointer; }
       <button class="btn-ghost" data-goto="pro">טופס מקצועי</button>
       <button class="btn-ghost" data-goto="identity">דמות עקבית</button>
       <button class="btn-ghost" data-goto="examples">דוגמאות</button>
+      <button class="btn-ghost" data-goto="bank" data-bank-btn hidden>בנק פרומפטים</button>
       <button class="btn-ghost" data-goto="explain">איך זה עובד</button>
+      <button class="btn-ghost" data-goto="admin" data-admin-btn hidden>ניהול</button>
       <button class="btn-ghost" data-goto="gate">שער</button>
     </nav>
   </header>
@@ -1114,6 +1175,16 @@ button { font-family: inherit; cursor: pointer; }
   <!-- ================= explain ================= -->
   <main class="view view-wide" data-view="explain" hidden>
     <div id="explain-root"></div>
+  </main>
+
+  <!-- ================= prompt bank ================= -->
+  <main class="view view-wide" data-view="bank" hidden>
+    <div id="bank-root"></div>
+  </main>
+
+  <!-- ================= admin ================= -->
+  <main class="view view-wide" data-view="admin" hidden>
+    <div id="admin-root"></div>
   </main>
 
   <footer class="footer">
@@ -5050,6 +5121,17 @@ function createSupabase(config) {
       persist(session);
     },
 
+    /* blocked / admin live in profiles, refreshed on every sign-in and boot */
+    async fetchProfile() {
+      const rows = await request('/rest/v1/profiles'
+        + `?id=eq.${encodeURIComponent(session.user.id)}&select=blocked,is_admin`);
+      const profile = rows[0] || { blocked: false, is_admin: false };
+      session.user.blocked = profile.blocked;
+      session.user.is_admin = profile.is_admin;
+      persist(session);
+      return profile;
+    },
+
     /* ---- cloud saves (PostgREST + RLS) ---- */
     async listShots() {
       await ensureFresh();
@@ -5081,6 +5163,79 @@ function createSupabase(config) {
     async deleteShot(id) {
       await ensureFresh();
       return request(`/rest/v1/saved_shots?id=eq.${encodeURIComponent(id)}`,
+        { method: 'DELETE' });
+    },
+
+    /* ---- backoffice (every call is gated again by RLS in the db) ---- */
+    async listProfiles() {
+      await ensureFresh();
+      return request('/rest/v1/profiles'
+        + '?select=id,email,name,blocked,is_admin,created_at'
+        + '&order=created_at.desc');
+    },
+    async setBlocked(id, blocked) {
+      await ensureFresh();
+      return request(`/rest/v1/profiles?id=eq.${encodeURIComponent(id)}`,
+        { method: 'PATCH', body: { blocked } });
+    },
+    async wipeShots(userId) {
+      await ensureFresh();
+      return request(
+        `/rest/v1/saved_shots?user_id=eq.${encodeURIComponent(userId)}`,
+        { method: 'DELETE' });
+    },
+    async shotOwners() {
+      await ensureFresh();
+      return request('/rest/v1/saved_shots?select=user_id');
+    },
+
+    /* ---- the prompt bank ---- */
+    async listBank() {
+      await ensureFresh();
+      return request('/rest/v1/prompt_bank'
+        + '?select=*&order=position.asc,created_at.desc');
+    },
+    async addBank(row) {
+      await ensureFresh();
+      return request('/rest/v1/prompt_bank', { method: 'POST', body: row });
+    },
+    async updateBank(id, patch) {
+      await ensureFresh();
+      return request(`/rest/v1/prompt_bank?id=eq.${encodeURIComponent(id)}`,
+        { method: 'PATCH', body: patch });
+    },
+    async deleteBank(id) {
+      await ensureFresh();
+      return request(`/rest/v1/prompt_bank?id=eq.${encodeURIComponent(id)}`,
+        { method: 'DELETE' });
+    },
+
+    /* ---- example images (public-read bucket, admin-write by policy) ---- */
+    imageUrl(path) {
+      return path
+        ? `${base}/storage/v1/object/public/prompt-images/${path}` : '';
+    },
+    async uploadImage(file) {
+      await ensureFresh();
+      const ext = (file.name.split('.').pop() || 'jpg').toLowerCase()
+        .replace(/[^a-z0-9]/g, '') || 'jpg';
+      const path = `${crypto.randomUUID()}.${ext}`;
+      const resp = await fetch(
+        `${base}/storage/v1/object/prompt-images/${path}`, {
+          method: 'POST',
+          headers: {
+            apikey: config.anon_key,
+            Authorization: `Bearer ${session.access_token}`,
+            'Content-Type': file.type || 'application/octet-stream',
+          },
+          body: file,
+        });
+      if (!resp.ok) throw { status: resp.status };
+      return path;
+    },
+    async deleteImage(path) {
+      await ensureFresh();
+      return request(`/storage/v1/object/prompt-images/${path}`,
         { method: 'DELETE' });
     },
   };
@@ -5371,13 +5526,29 @@ function initAuth(container, lib, hooks = {}) {
     input.focus();
   }
 
+  async function admitOrEject() {
+    try { await api.fetchProfile(); } catch { /* keep last known flags */ }
+    if (api.session && api.session.user.blocked) {
+      await api.logout();
+      renderChip();
+      mode = 'login';
+      notice = { kind: 'error', text: 'החשבון הזה נחסם על ידי המרצה.' };
+      render();
+      if (hooks.onSignedOut) hooks.onSignedOut();
+      return false;
+    }
+    return true;
+  }
+
   function finishLogin() {
     mode = 'login'; notice = null;
     render();
-    api.fetchUser().catch(() => {}).then(() => {
+    (async () => {
+      try { await api.fetchUser(); } catch { /* metadata only */ }
+      if (!(await admitOrEject())) return;
       renderChip();
       if (hooks.onSignedIn) hooks.onSignedIn();
-    });
+    })();
   }
 
   /* ---- boot: email links first, then any stored session ---- */
@@ -5385,9 +5556,11 @@ function initAuth(container, lib, hooks = {}) {
   if (hashType === 'recovery') {
     mode = 'set_password';
   } else if (api.session) {
-    api.ensureFresh().then(() => {
-      if (api.session) { renderChip(); if (hooks.onSignedIn) hooks.onSignedIn(); }
-      else if (hooks.onSignedOut) hooks.onSignedOut();
+    api.ensureFresh().then(async () => {
+      if (api.session && await admitOrEject()) {
+        renderChip();
+        if (hooks.onSignedIn) hooks.onSignedIn();
+      } else if (!api.session && hooks.onSignedOut) hooks.onSignedOut();
     });
   }
   if (hashType === 'signup' || hashType === 'magiclink') finishLogin();
@@ -5397,6 +5570,10 @@ function initAuth(container, lib, hooks = {}) {
   return {
     enabled: true,
     get session() { return api.session; },
+    get isAdmin() {
+      return Boolean(api.session && api.session.user.is_admin);
+    },
+    backend: api,
     saveCurrent,
     openWorkPanel,
   };
@@ -5408,21 +5585,440 @@ if (typeof globalThis !== 'undefined') {
   globalThis.PM = Object.assign(globalThis.PM || {}, AUTH);
 }
 
+/* Prompt Machine — "בנק פרומפטים לשימוש": ready prompts the teacher curates
+   in the backoffice, each optionally carrying an example image. Students
+   read; only the admin writes — enforced by RLS, not by this file. */
+'use strict';
+
+function initBank(container, lib, authApi) {
+  const el = (tag, cls, text) => {
+    const node = document.createElement(tag);
+    if (cls) node.className = cls;
+    if (text !== undefined) node.textContent = text;
+    return node;
+  };
+
+  const panel = el('section', 'panel');
+  container.append(panel);
+
+  const header = el('div', 'panel-header');
+  header.append(el('span', 'panel-title', 'בנק פרומפטים לשימוש'));
+  const countChip = el('span', 'chip-meta', '');
+  header.append(countChip);
+  panel.append(header);
+
+  panel.append(el('p', 'section-hint',
+    'פרומפטים מוכנים מהמרצה, להעתקה ולשימוש כמו שהם — או כנקודת פתיחה. '
+    + 'כשמצורפת תמונת דוגמה, היא נוצרה מהפרומפט שלצידה.'));
+
+  const list = el('div', 'bank-list');
+  panel.append(list);
+
+  async function refresh() {
+    list.innerHTML = '';
+    list.append(el('p', 'section-hint', 'טוען…'));
+    let rows;
+    try {
+      rows = await authApi.backend.listBank();
+    } catch {
+      list.innerHTML = '';
+      list.append(el('p', 'rule-note', 'לא הצלחנו לטעון את הבנק. נסו לרענן.'));
+      return;
+    }
+    list.innerHTML = '';
+    countChip.textContent = `${rows.length} פרומפטים`;
+    if (!rows.length) {
+      list.append(el('p', 'section-hint', 'הבנק עדיין ריק.'));
+      return;
+    }
+    for (const row of rows) {
+      const card = el('article', 'bank-card');
+      const body = el('div', 'bank-card-body');
+      body.append(el('h3', 'bank-card-title', row.title));
+      if (row.notes) body.append(el('p', 'bank-card-notes', row.notes));
+      const promptBox = el('pre', 'prompt-box mono bank-card-prompt');
+      promptBox.textContent = row.body;
+      body.append(promptBox);
+
+      const copyBtn = el('button', 'btn-run bank-copy', 'העתקת הפרומפט');
+      copyBtn.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(row.body);
+        } catch {
+          const area = document.createElement('textarea');
+          area.value = row.body;
+          document.body.append(area);
+          area.select();
+          document.execCommand('copy');
+          area.remove();
+        }
+        copyBtn.textContent = 'הועתק ✓';
+        setTimeout(() => { copyBtn.textContent = 'העתקת הפרומפט'; }, 1400);
+      });
+      body.append(copyBtn);
+      card.append(body);
+
+      if (row.image_path) {
+        const figure = el('div', 'bank-card-figure');
+        const img = el('img', 'bank-card-image');
+        img.loading = 'lazy';
+        img.alt = row.title;
+        img.src = authApi.backend.imageUrl(row.image_path);
+        figure.append(img);
+        card.append(figure);
+      }
+      list.append(card);
+    }
+  }
+
+  return { refresh };
+}
+
+const BANK = { initBank };
+if (typeof module !== 'undefined') module.exports = BANK;
+if (typeof globalThis !== 'undefined') {
+  globalThis.PM = Object.assign(globalThis.PM || {}, BANK);
+}
+
+/* Prompt Machine — the backoffice. Two tabs: students (block / unblock /
+   wipe their cloud work) and the prompt bank (add / edit / remove prompts,
+   each with an optional example image).
+
+   This view renders only for an admin session, but that is convenience, not
+   security: every request it makes is judged again by RLS in the database,
+   where is_admin() is the only voice that counts. */
+'use strict';
+
+function initAdmin(container, lib, authApi) {
+  const backend = authApi.backend;
+
+  const el = (tag, cls, text) => {
+    const node = document.createElement(tag);
+    if (cls) node.className = cls;
+    if (text !== undefined) node.textContent = text;
+    return node;
+  };
+
+  const panel = el('section', 'panel');
+  container.append(panel);
+
+  const header = el('div', 'panel-header');
+  header.append(el('span', 'panel-title', 'ניהול'));
+  header.append(el('span', 'chip-meta', 'בק-אופיס למרצה'));
+  panel.append(header);
+
+  const tabs = el('div', 'tabs admin-tabs');
+  panel.append(tabs);
+  const panes = {};
+  let activeTab = 'users';
+  for (const [key, label] of [['users', 'תלמידים'], ['bank', 'בנק הפרומפטים']]) {
+    const tab = el('button', 'tab', label);
+    tab.dataset.tab = key;
+    tab.addEventListener('click', () => { activeTab = key; showTab(); });
+    tabs.append(tab);
+    panes[key] = el('div', 'admin-pane');
+    panes[key].hidden = true;
+    panel.append(panes[key]);
+  }
+  function showTab() {
+    for (const tab of tabs.children) {
+      tab.className = 'tab '
+        + (tab.dataset.tab === activeTab ? 'active' : 'inactive');
+    }
+    for (const [key, pane] of Object.entries(panes)) {
+      pane.hidden = key !== activeTab;
+    }
+  }
+
+  /* two-click confirm: the first click arms, the second acts */
+  function armed(button, label, action) {
+    button.addEventListener('click', async () => {
+      if (button.dataset.arm !== '1') {
+        button.dataset.arm = '1';
+        button.textContent = `לאשר ${label}?`;
+        setTimeout(() => {
+          button.dataset.arm = '';
+          button.textContent = label;
+        }, 2500);
+        return;
+      }
+      button.dataset.arm = '';
+      button.disabled = true;
+      try { await action(); } finally { button.disabled = false; }
+    });
+  }
+
+  /* ---------------------------------------------------- students ---- */
+  const usersPane = panes.users;
+  usersPane.append(el('p', 'section-hint',
+    'חסימה מנתקת את התלמיד מיד בכניסה הבאה, חוסמת את הבנק ואת השמירה בענן, '
+    + 'והפיכה. "ניקוי עבודות" מוחק לצמיתות את כל מה ששמור לו בענן. '
+    + 'מחיקת חשבון סופית עושים בדשבורד Supabase (Authentication → Users).'));
+  const usersList = el('div', 'admin-users');
+  usersPane.append(usersList);
+
+  async function refreshUsers() {
+    usersList.innerHTML = '';
+    usersList.append(el('p', 'section-hint', 'טוען…'));
+    let profiles, owners;
+    try {
+      [profiles, owners] = await Promise.all(
+        [backend.listProfiles(), backend.shotOwners()]);
+    } catch {
+      usersList.innerHTML = '';
+      usersList.append(el('p', 'rule-note', 'טעינת הרשימה נכשלה. נסו לרענן.'));
+      return;
+    }
+    const workCount = {};
+    for (const { user_id } of owners) {
+      workCount[user_id] = (workCount[user_id] || 0) + 1;
+    }
+    usersList.innerHTML = '';
+    for (const profile of profiles) {
+      const row = el('div', 'auth-work-row admin-user-row'
+        + (profile.blocked ? ' blocked' : ''));
+      const meta = el('div', 'auth-work-meta');
+      const nameLine = el('span', 'auth-work-name',
+        profile.name || profile.email);
+      if (profile.is_admin) {
+        nameLine.append(el('span', 'chip-meta admin-chip', 'אדמין'));
+      }
+      if (profile.blocked) {
+        nameLine.append(el('span', 'chip-meta blocked-chip', 'חסום'));
+      }
+      meta.append(nameLine);
+      meta.append(el('span', 'chip-meta',
+        `${profile.email} · הצטרפות ${new Date(profile.created_at)
+          .toLocaleDateString('he-IL')} · ${workCount[profile.id] || 0} עבודות`));
+      row.append(meta);
+
+      const actions = el('div', 'auth-work-actions');
+      if (!profile.is_admin) {
+        const blockBtn = el('button', 'btn-ghost'
+          + (profile.blocked ? '' : ' auth-danger'),
+          profile.blocked ? 'שחרור חסימה' : 'חסימה');
+        blockBtn.addEventListener('click', async () => {
+          blockBtn.disabled = true;
+          try {
+            await backend.setBlocked(profile.id, !profile.blocked);
+            refreshUsers();
+          } catch { blockBtn.disabled = false; }
+        });
+        actions.append(blockBtn);
+      }
+      const wipeBtn = el('button', 'btn-ghost auth-danger', 'ניקוי עבודות');
+      armed(wipeBtn, 'ניקוי עבודות', async () => {
+        await backend.wipeShots(profile.id);
+        refreshUsers();
+      });
+      actions.append(wipeBtn);
+      row.append(actions);
+      usersList.append(row);
+    }
+  }
+
+  /* ------------------------------------------------- prompt bank ---- */
+  const bankPane = panes.bank;
+  bankPane.append(el('p', 'section-hint',
+    'מה שנשמר כאן מופיע מיד אצל כל התלמידים ב"בנק פרומפטים לשימוש". '
+    + 'תמונת הדוגמה איננה חובה, אבל שווה: התלמיד רואה מה הפרומפט מייצר.'));
+
+  const form = el('div', 'admin-bank-form');
+  bankPane.append(form);
+
+  const titleInput = el('input', 'free-text');
+  titleInput.placeholder = 'כותרת (למשל: פורטרט חלון, ריאליזם מלא)';
+  titleInput.maxLength = 120;
+
+  const notesInput = el('input', 'free-text');
+  notesInput.placeholder = 'הערה לתלמידים (רשות, בעברית)';
+
+  const bodyInput = el('textarea', 'free-text mono admin-bank-body');
+  bodyInput.placeholder = 'the prompt itself, in English';
+  bodyInput.dir = 'ltr';
+  bodyInput.rows = 6;
+
+  const imageRow = el('div', 'admin-image-row');
+  const imageInput = el('input');
+  imageInput.type = 'file';
+  imageInput.accept = 'image/png,image/jpeg,image/webp';
+  imageInput.hidden = true;
+  const imageBtn = el('button', 'btn-ghost', 'צירוף תמונת דוגמה');
+  imageBtn.addEventListener('click', () => imageInput.click());
+  const imagePreview = el('img', 'admin-image-preview');
+  imagePreview.hidden = true;
+  const imageClear = el('button', 'btn-ghost auth-danger', 'הסרת התמונה');
+  imageClear.hidden = true;
+  imageRow.append(imageInput, imageBtn, imagePreview, imageClear);
+
+  let pendingFile = null;   /* a newly chosen file, not yet uploaded */
+  let keepImagePath = '';   /* existing image kept while editing */
+  let editingId = null;
+
+  imageInput.addEventListener('change', () => {
+    const file = imageInput.files[0];
+    if (!file) return;
+    if (file.size > 4 * 1024 * 1024) {
+      note('התמונה גדולה מ-4MB. הקטינו אותה ונסו שוב.', 'error');
+      imageInput.value = '';
+      return;
+    }
+    pendingFile = file;
+    keepImagePath = '';
+    imagePreview.src = URL.createObjectURL(file);
+    imagePreview.hidden = false;
+    imageClear.hidden = false;
+  });
+  imageClear.addEventListener('click', () => {
+    pendingFile = null;
+    keepImagePath = '';
+    imageInput.value = '';
+    imagePreview.hidden = true;
+    imageClear.hidden = true;
+  });
+
+  const noticeBox = el('p', 'auth-notice');
+  const note = (text, kind) => {
+    noticeBox.textContent = text;
+    noticeBox.className = `auth-notice ${kind}`;
+  };
+
+  const formButtons = el('div', 'button-row');
+  const saveBtn = el('button', 'btn-run', 'הוספה לבנק');
+  const cancelEdit = el('button', 'btn-ghost', 'ביטול עריכה');
+  cancelEdit.hidden = true;
+  formButtons.append(saveBtn, cancelEdit);
+
+  form.append(titleInput, notesInput, bodyInput, imageRow, noticeBox, formButtons);
+
+  const bankList = el('div', 'admin-users');
+  bankPane.append(bankList);
+
+  function resetForm() {
+    editingId = null;
+    titleInput.value = '';
+    notesInput.value = '';
+    bodyInput.value = '';
+    pendingFile = null;
+    keepImagePath = '';
+    imageInput.value = '';
+    imagePreview.hidden = true;
+    imageClear.hidden = true;
+    saveBtn.textContent = 'הוספה לבנק';
+    cancelEdit.hidden = true;
+    noticeBox.textContent = '';
+  }
+  cancelEdit.addEventListener('click', resetForm);
+
+  saveBtn.addEventListener('click', async () => {
+    const title = titleInput.value.trim();
+    const body = bodyInput.value.trim();
+    if (!title || !body) { note('צריך גם כותרת וגם פרומפט', 'error'); return; }
+    saveBtn.disabled = true;
+    note('שומר…', 'ok');
+    try {
+      let imagePath = keepImagePath;
+      if (pendingFile) imagePath = await backend.uploadImage(pendingFile);
+      const row = { title, body, notes: notesInput.value.trim(),
+                    image_path: imagePath };
+      if (editingId) await backend.updateBank(editingId, row);
+      else await backend.addBank(row);
+      resetForm();
+      note('נשמר ✓', 'ok');
+      refreshBank();
+    } catch {
+      note('השמירה נכשלה. נסו שוב.', 'error');
+    }
+    saveBtn.disabled = false;
+  });
+
+  async function refreshBank() {
+    bankList.innerHTML = '';
+    bankList.append(el('p', 'section-hint', 'טוען…'));
+    let rows;
+    try {
+      rows = await backend.listBank();
+    } catch {
+      bankList.innerHTML = '';
+      bankList.append(el('p', 'rule-note', 'טעינת הבנק נכשלה. נסו לרענן.'));
+      return;
+    }
+    bankList.innerHTML = '';
+    if (!rows.length) {
+      bankList.append(el('p', 'section-hint', 'הבנק ריק. הפרומפט הראשון שלך למעלה.'));
+    }
+    for (const row of rows) {
+      const item = el('div', 'auth-work-row');
+      const meta = el('div', 'auth-work-meta');
+      meta.append(el('span', 'auth-work-name', row.title));
+      meta.append(el('span', 'chip-meta',
+        `${row.body.length.toLocaleString('en')} תווים`
+        + (row.image_path ? ' · עם תמונה' : '')));
+      item.append(meta);
+      const actions = el('div', 'auth-work-actions');
+      const editBtn = el('button', 'btn-ghost', 'עריכה');
+      editBtn.addEventListener('click', () => {
+        editingId = row.id;
+        titleInput.value = row.title;
+        notesInput.value = row.notes || '';
+        bodyInput.value = row.body;
+        pendingFile = null;
+        keepImagePath = row.image_path || '';
+        imagePreview.hidden = !row.image_path;
+        imageClear.hidden = !row.image_path;
+        if (row.image_path) imagePreview.src = backend.imageUrl(row.image_path);
+        saveBtn.textContent = 'עדכון';
+        cancelEdit.hidden = false;
+        form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+      const delBtn = el('button', 'btn-ghost auth-danger', 'מחיקה');
+      armed(delBtn, 'מחיקה', async () => {
+        await backend.deleteBank(row.id);
+        if (row.image_path) {
+          backend.deleteImage(row.image_path).catch(() => {});
+        }
+        if (editingId === row.id) resetForm();
+        refreshBank();
+      });
+      actions.append(editBtn, delBtn);
+      item.append(actions);
+      bankList.append(item);
+    }
+  }
+
+  showTab();
+  return {
+    refresh() { refreshUsers(); refreshBank(); },
+  };
+}
+
+const ADMIN = { initAdmin };
+if (typeof module !== 'undefined') module.exports = ADMIN;
+if (typeof globalThis !== 'undefined') {
+  globalThis.PM = Object.assign(globalThis.PM || {}, ADMIN);
+}
+
 /* Prompt Machine — app shell: routing between views, and the login gate.
    The gate only exists when auth_config carries a Supabase project; without
-   one the app behaves exactly as before (local builds, tests, file://). */
+   one the app behaves exactly as before (local builds, tests, file://).
+   The admin view renders only for an admin session — as convenience; every
+   admin action is judged again by RLS in the database. */
 'use strict';
 
 const LIB = JSON.parse(document.getElementById('lib-data').textContent || '{}');
 
-const VIEWS = ['gate', 'quick', 'pro', 'identity', 'examples', 'explain', 'auth'];
+const VIEWS = ['gate', 'quick', 'pro', 'identity', 'examples', 'explain',
+               'auth', 'bank', 'admin'];
 
-let authApi = { enabled: false, session: null };
+let authApi = { enabled: false, session: null, isAdmin: false };
+let bankApi = null;
+let adminApi = null;
 const signedOut = () => authApi.enabled && !authApi.session;
 
 function setMode(name) {
   if (!VIEWS.includes(name)) name = 'gate';
   if (signedOut()) name = 'auth'; /* the gate is a wall only while signed out */
+  if (name === 'admin' && !authApi.isAdmin) name = 'gate';
   for (const view of document.querySelectorAll('[data-view]')) {
     view.hidden = view.dataset.view !== name;
   }
@@ -5431,6 +6027,15 @@ function setMode(name) {
   for (const btn of modeSwitch.querySelectorAll('[data-goto]')) {
     btn.classList.toggle('active', btn.dataset.goto === name);
   }
+  if (name === 'bank' && bankApi) bankApi.refresh();
+  if (name === 'admin' && adminApi) adminApi.refresh();
+}
+
+function syncRoleButtons() {
+  const bankBtn = document.querySelector('[data-bank-btn]');
+  const adminBtn = document.querySelector('[data-admin-btn]');
+  if (bankBtn) bankBtn.hidden = !authApi.enabled;
+  if (adminBtn) adminBtn.hidden = !authApi.isAdmin;
 }
 
 document.addEventListener('click', (event) => {
@@ -5440,8 +6045,8 @@ document.addEventListener('click', (event) => {
 
 if (Object.keys(LIB).length) {
   authApi = globalThis.PM.initAuth(document.getElementById('auth-root'), LIB, {
-    onSignedIn() { setMode('gate'); },
-    onSignedOut() { setMode('auth'); },
+    onSignedIn() { syncRoleButtons(); setMode('gate'); },
+    onSignedOut() { syncRoleButtons(); setMode('auth'); },
     onNeedAuth() { setMode('auth'); },
     onLoadSpec(spec) {
       formApi.load(spec);
@@ -5474,8 +6079,16 @@ if (Object.keys(LIB).length) {
     },
   });
   globalThis.PM.initExplain(document.getElementById('explain-root'), LIB);
+
+  if (authApi.enabled) {
+    bankApi = globalThis.PM.initBank(
+      document.getElementById('bank-root'), LIB, authApi);
+    adminApi = globalThis.PM.initAdmin(
+      document.getElementById('admin-root'), LIB, authApi);
+  }
 }
 
+syncRoleButtons();
 setMode(signedOut() ? 'auth' : 'gate');
 
 </script>
