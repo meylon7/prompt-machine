@@ -4117,7 +4117,8 @@ function initForm(root, lib, hooks = {}) {
     ['grade', 'ריאליזם וגרייד'],
     ['negative', 'נגטיבים ותקציב'],
   ];
-  let activeGroup = 'basis';
+  /* the reference is where most work actually starts */
+  let activeGroup = 'reference';
 
   const groupBar = el('div', 'step-tabs form-tabs');
   editor.append(groupBar);
