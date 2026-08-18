@@ -1325,7 +1325,7 @@ button { font-family: inherit; cursor: pointer; }
   <footer class="footer">
     <span class="chip-meta">HEBREW UI &middot; ENGLISH PROMPTS</span>
     <span class="chip-meta">NO SERVER &middot; ONE FILE</span>
-    <span class="chip-meta" data-build>BUILD 18.08 14:27</span>
+    <span class="chip-meta" data-build>BUILD 18.08 14:43</span>
   </footer>
 
 </div>
@@ -4192,6 +4192,10 @@ function initForm(root, lib, hooks = {}) {
     });
   }
 
+  /* the picked template has to survive the rebuild that picking it causes,
+     or the control snaps back to the empty option and reads as broken */
+  let chosenTemplate = '';
+
   const RENDERERS = {
     reference() {
       const intro = el('p', 'section-hint',
@@ -4363,9 +4367,12 @@ function initForm(root, lib, hooks = {}) {
         template.append(new Option(
           `תבנית: ${lib.quick_he.recipes[key].label}`, key));
       }
+      template.value = chosenTemplate;
       template.addEventListener('change', () => {
-        if (!template.value) { spec = blankSpec(); render(); return; }
-        spec = toAuthoringShape(lib.quick_he.recipes[template.value].base);
+        chosenTemplate = template.value;
+        spec = chosenTemplate
+          ? toAuthoringShape(lib.quick_he.recipes[chosenTemplate].base)
+          : blankSpec();
         render();
       });
       groupPane.append(row('נקודת התחלה (רשות)', template, 'genre'));
@@ -4857,6 +4864,7 @@ function initForm(root, lib, hooks = {}) {
     },
     load(newSpec) {
       spec = toAuthoringShape(newSpec);
+      chosenTemplate = '';
       activeGroup = 'basis';
       render();
     },
