@@ -5092,6 +5092,12 @@ function createSupabase(config) {
       });
     },
 
+    async resendConfirmation(email) {
+      await request('/auth/v1/resend', {
+        method: 'POST', auth: false, body: { type: 'signup', email },
+      });
+    },
+
     async setPassword(password) {
       await request('/auth/v1/user', { method: 'PUT', body: { password } });
     },
@@ -5316,6 +5322,23 @@ function initAuth(container, lib, hooks = {}) {
     }
     form.append(noticeBox);
 
+    if (notice && notice.resend) {
+      const resend = el('button', 'gate-link auth-alt',
+        'שליחה חוזרת של אימייל האישור');
+      resend.type = 'button';
+      resend.addEventListener('click', async () => {
+        resend.disabled = true;
+        try {
+          await api.resendConfirmation(notice.resend);
+          notice = { kind: 'ok', text: 'אימייל אישור חדש בדרך אליכם.' };
+        } catch {
+          notice = { kind: 'error', text: 'השליחה נכשלה. נסו שוב בעוד דקה.' };
+        }
+        render();
+      });
+      form.append(resend);
+    }
+
     const submit = el('button', 'btn-run auth-submit', {
       login: 'כניסה', signup: 'יצירת חשבון',
       recover: 'שליחת קישור איפוס', set_password: 'שמירת הסיסמה',
@@ -5370,11 +5393,20 @@ function initAuth(container, lib, hooks = {}) {
           return;
         }
       } catch (err) {
-        /* uniform wording: never reveal which field failed or what exists */
-        notice = { kind: 'error', text: err.local ? err.local
-          : err.network ? 'אין חיבור לרשת. נסו שוב.'
-          : mode === 'login' ? 'אימייל או סיסמה שגויים'
-          : 'הפעולה נכשלה. בדקו את הפרטים ונסו שוב.' };
+        /* uniform wording: never reveal which field failed or what exists.
+           the one exception: a correct password on an unconfirmed email —
+           telling that user to open their inbox leaks nothing. */
+        const code = err.data && (err.data.error_code || err.data.code);
+        if (code === 'email_not_confirmed') {
+          notice = { kind: 'error', resend: email.input.value.trim(),
+            text: 'האימייל עוד לא אושר. פתחו את קישור האישור שנשלח אליכם '
+              + '(בדקו גם בספאם).' };
+        } else {
+          notice = { kind: 'error', text: err.local ? err.local
+            : err.network ? 'אין חיבור לרשת. נסו שוב.'
+            : mode === 'login' ? 'אימייל או סיסמה שגויים'
+            : 'הפעולה נכשלה. בדקו את הפרטים ונסו שוב.' };
+        }
       }
       render();
     });
