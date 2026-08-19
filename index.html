@@ -1220,6 +1220,9 @@ button { font-family: inherit; cursor: pointer; }
 .bank-preview-body { display: flex; flex-direction: column; gap: 10px; margin: 14px 0 16px; }
 .bank-preview-body .bank-card-prompt { max-height: 240px; overflow-y: auto; }
 
+/* a work the student put in the class gallery */
+.auth-shared { color: var(--cyan-bright); border-color: var(--cyan-border); }
+
 </style>
 </head>
 <body>
@@ -1242,6 +1245,7 @@ button { font-family: inherit; cursor: pointer; }
       <button class="btn-ghost" data-goto="identity">דמות עקבית</button>
       <button class="btn-ghost" data-goto="examples">דוגמאות</button>
       <button class="btn-ghost" data-goto="bank" data-bank-btn hidden>בנק פרומפטים</button>
+      <button class="btn-ghost" data-goto="shared" data-bank-btn hidden>עבודות משותפות</button>
       <button class="btn-ghost" data-goto="explain">איך זה עובד</button>
       <button class="btn-ghost" data-goto="admin" data-admin-btn hidden>ניהול</button>
       <button class="btn-ghost" data-goto="gate">שער</button>
@@ -1298,6 +1302,8 @@ button { font-family: inherit; cursor: pointer; }
       <button class="gate-link" data-goto="explain">איך זה עובד</button>
       <span class="gate-link-sep" data-bank-btn hidden aria-hidden="true">·</span>
       <button class="gate-link" data-goto="bank" data-bank-btn hidden>בנק פרומפטים לשימוש</button>
+      <span class="gate-link-sep" data-bank-btn hidden aria-hidden="true">·</span>
+      <button class="gate-link" data-goto="shared" data-bank-btn hidden>עבודות משותפות</button>
     </div>
     <div class="gate-links" data-admin-btn hidden>
       <button class="gate-card gate-admin-card" data-goto="admin">
@@ -1337,6 +1343,11 @@ button { font-family: inherit; cursor: pointer; }
     <div id="bank-root"></div>
   </main>
 
+  <!-- ================= shared works ================= -->
+  <main class="view view-wide" data-view="shared" hidden>
+    <div id="shared-root"></div>
+  </main>
+
   <!-- ================= admin ================= -->
   <main class="view view-wide" data-view="admin" hidden>
     <div id="admin-root"></div>
@@ -1345,7 +1356,7 @@ button { font-family: inherit; cursor: pointer; }
   <footer class="footer">
     <span class="chip-meta">HEBREW UI &middot; ENGLISH PROMPTS</span>
     <span class="chip-meta">NO SERVER &middot; ONE FILE</span>
-    <span class="chip-meta" data-build>BUILD 19.08 15:24</span>
+    <span class="chip-meta" data-build>BUILD 19.08 15:48</span>
   </footer>
 
 </div>
@@ -6207,7 +6218,8 @@ function createSupabase(config) {
     async listShots() {
       await ensureFresh();
       return request('/rest/v1/saved_shots'
-        + '?select=id,name,updated_at&order=updated_at.desc');
+        + `?user_id=eq.${session.user.id}`
+        + '&select=id,name,updated_at,shared&order=updated_at.desc');
     },
     async getShot(id) {
       await ensureFresh();
@@ -6230,6 +6242,24 @@ function createSupabase(config) {
             updated_at: new Date().toISOString() }),
         });
       if (!resp.ok) throw { status: resp.status };
+    },
+    /* the class gallery: only rows a student chose to share. The filter is
+       a convenience for the query; the database returns nothing else even
+       without it, because the select policy allows only shared rows. */
+    async listShared() {
+      await ensureFresh();
+      return request('/rest/v1/saved_shots'
+        + '?shared=eq.true&select=id,name,author_name,shared_at,user_id'
+        + '&order=shared_at.desc');
+    },
+    async setShared(id, shared, authorName) {
+      await ensureFresh();
+      return request(`/rest/v1/saved_shots?id=eq.${encodeURIComponent(id)}`,
+        { method: 'PATCH',
+          body: shared
+            ? { shared: true, author_name: authorName,
+                shared_at: new Date().toISOString() }
+            : { shared: false, shared_at: null } });
     },
     async deleteShot(id) {
       await ensureFresh();
@@ -6480,6 +6510,9 @@ function initAuth(container, lib, hooks = {}) {
   /* ---- topbar chip: who is signed in, their saved work, logout ---- */
   const chipHost = document.querySelector('[data-auth-chip]');
 
+  const displayName = () => (api.session
+    && (api.session.user.name || api.session.user.email)) || 'תלמיד';
+
   function renderChip() {
     if (!chipHost) return;
     chipHost.innerHTML = '';
@@ -6558,6 +6591,24 @@ function initAuth(container, lib, hooks = {}) {
           if (spec && hooks.onLoadSpec) hooks.onLoadSpec(spec);
         } catch { load.textContent = 'שגיאה'; }
       });
+      /* sharing is opt in, one work at a time, and reversible here */
+      const shareLabel = (on) => (on ? 'בשיתוף ✓' : 'שיתוף עם הכיתה');
+      const share = el('button', 'btn-ghost', shareLabel(row.shared));
+      if (row.shared) share.classList.add('auth-shared');
+      share.addEventListener('click', async () => {
+        const next = !row.shared;
+        share.disabled = true;
+        try {
+          await api.setShared(row.id, next, displayName());
+          row.shared = next;
+          share.textContent = shareLabel(next);
+          share.classList.toggle('auth-shared', next);
+        } catch {
+          share.textContent = 'לא הצלחנו';
+          setTimeout(() => { share.textContent = shareLabel(row.shared); }, 1600);
+        }
+        share.disabled = false;
+      });
       const del = el('button', 'btn-ghost auth-danger', 'מחיקה');
       del.addEventListener('click', async () => {
         if (del.dataset.arm !== '1') {
@@ -6565,7 +6616,7 @@ function initAuth(container, lib, hooks = {}) {
         }
         try { await api.deleteShot(row.id); item.remove(); } catch { /* keep */ }
       });
-      actions.append(load, del);
+      actions.append(share, load, del);
       item.append(actions);
       list.append(item);
     }
@@ -6673,6 +6724,7 @@ function initAuth(container, lib, hooks = {}) {
     backend: api,
     saveCurrent,
     openWorkPanel,
+    displayName,
   };
 }
 
@@ -6805,6 +6857,119 @@ const BANK = { initBank, splitVariants, copyButton };
 if (typeof module !== 'undefined') module.exports = BANK;
 if (typeof globalThis !== 'undefined') {
   globalThis.PM = Object.assign(globalThis.PM || {}, BANK);
+}
+
+/* Prompt Machine, "עבודות משותפות": the class gallery. A saved shot is
+   private until its owner shares it; this screen lists what was shared, by
+   whom, and lets anyone signed in open it in the professional form.
+   Read access is decided by row level security, not by this file: the list
+   below can only ever contain rows the database agreed to hand over. */
+'use strict';
+
+function initShared(container, lib, authApi, hooks) {
+  const el = (tag, cls, text) => {
+    const node = document.createElement(tag);
+    if (cls) node.className = cls;
+    if (text !== undefined) node.textContent = text;
+    return node;
+  };
+
+  const panel = el('section', 'panel');
+  container.append(panel);
+
+  const header = el('div', 'panel-header');
+  header.append(el('span', 'panel-title', 'עבודות משותפות'));
+  const countChip = el('span', 'chip-meta', '');
+  header.append(countChip);
+  panel.append(header);
+
+  panel.append(el('p', 'section-hint',
+    'עבודות שתלמידים בחרו לשתף. אפשר לפתוח כל אחת בטופס המקצועי, לשנות '
+    + 'ולשמור כעבודה משלכם. לשיתוף עבודה שלכם: הכפתור עם השם שלכם למעלה, '
+    + 'ואז "שיתוף עם הכיתה".'));
+
+  const list = el('div', 'auth-work-list');
+  panel.append(list);
+
+  const when = (stamp) => {
+    if (!stamp) return '';
+    try { return new Date(stamp).toLocaleDateString('he-IL'); } catch { return ''; }
+  };
+
+  async function refresh() {
+    list.innerHTML = '';
+    list.append(el('p', 'section-hint', 'טוען…'));
+    let rows;
+    try {
+      rows = await authApi.backend.listShared();
+    } catch (err) {
+      list.innerHTML = '';
+      /* the column is missing until the sharing migration has been run:
+         say so plainly instead of showing an empty gallery */
+      list.append(el('p', 'rule-note', err && err.status === 400
+        ? 'השיתוף עדיין לא הופעל במסד הנתונים.'
+        : 'לא הצלחנו לטעון את הרשימה. נסו לרענן.'));
+      return;
+    }
+    list.innerHTML = '';
+    countChip.textContent = `${rows.length} עבודות`;
+    if (!rows.length) {
+      list.append(el('p', 'section-hint',
+        'עוד לא שותפה אף עבודה. אתם מוזמנים להיות הראשונים.'));
+      return;
+    }
+
+    const me = authApi.session && authApi.session.user.id;
+    for (const row of rows) {
+      const item = el('div', 'auth-work-row');
+      const meta = el('div', 'auth-work-meta');
+      meta.append(el('span', 'auth-work-name', row.name));
+      const by = [row.author_name || 'תלמיד', when(row.shared_at)]
+        .filter(Boolean).join(' · ');
+      meta.append(el('span', 'chip-meta', by));
+      item.append(meta);
+
+      const actions = el('div', 'auth-work-actions');
+      const load = el('button', 'btn-ghost', 'פתיחה בטופס');
+      load.addEventListener('click', async () => {
+        load.disabled = true;
+        try {
+          const spec = await authApi.backend.getShot(row.id);
+          if (spec && hooks.openInPro) hooks.openInPro(spec);
+        } catch { load.textContent = 'שגיאה'; }
+        load.disabled = false;
+      });
+      actions.append(load);
+
+      /* the owner takes their own work down; the teacher may take down any
+         work, and the database refuses the same click from anyone else */
+      if (me === row.user_id || authApi.isAdmin) {
+        const pull = el('button', 'btn-ghost auth-danger', 'הסרה משיתוף');
+        pull.addEventListener('click', async () => {
+          if (pull.dataset.arm !== '1') {
+            pull.dataset.arm = '1';
+            pull.textContent = 'לאשר הסרה?';
+            return;
+          }
+          try {
+            await authApi.backend.setShared(row.id, false);
+            item.remove();
+          } catch { pull.textContent = 'לא הצלחנו'; }
+        });
+        actions.append(pull);
+      }
+      item.append(actions);
+      list.append(item);
+    }
+  }
+
+  return { refresh };
+}
+
+const SHARED = { initShared };
+if (typeof module !== 'undefined') module.exports = SHARED;
+if (typeof globalThis !== 'undefined') {
+  globalThis.PM = Object.assign(globalThis.PM || {}, SHARED);
 }
 
 /* Prompt Machine — the backoffice. Two tabs: students (block / unblock /
@@ -7204,10 +7369,11 @@ if (typeof globalThis !== 'undefined') {
 const LIB = JSON.parse(document.getElementById('lib-data').textContent || '{}');
 
 const VIEWS = ['gate', 'quick', 'pro', 'identity', 'examples', 'explain',
-               'auth', 'bank', 'admin'];
+               'auth', 'bank', 'shared', 'admin'];
 
 let authApi = { enabled: false, session: null, isAdmin: false };
 let bankApi = null;
+let sharedApi = null;
 let adminApi = null;
 const signedOut = () => authApi.enabled && !authApi.session;
 
@@ -7224,6 +7390,7 @@ function setMode(name) {
     btn.classList.toggle('active', btn.dataset.goto === name);
   }
   if (name === 'bank' && bankApi) bankApi.refresh();
+  if (name === 'shared' && sharedApi) sharedApi.refresh();
   if (name === 'admin' && adminApi) adminApi.refresh();
   /* the view lives in the address, so a screen can be linked to directly */
   if (name !== 'auth' && location.hash !== `#${name}`) {
@@ -7299,6 +7466,13 @@ if (Object.keys(LIB).length) {
   if (authApi.enabled) {
     bankApi = globalThis.PM.initBank(
       document.getElementById('bank-root'), LIB, authApi);
+    sharedApi = globalThis.PM.initShared(
+      document.getElementById('shared-root'), LIB, authApi, {
+        openInPro(spec) {
+          formApi.load(spec);
+          setMode('pro');
+        },
+      });
     adminApi = globalThis.PM.initAdmin(
       document.getElementById('admin-root'), LIB, authApi);
   }
