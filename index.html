@@ -1200,6 +1200,26 @@ button { font-family: inherit; cursor: pointer; }
   margin: 0;
 }
 
+/* ---- backoffice: a bank row exactly as the student sees it ---- */
+.bank-preview-panel {
+  width: min(760px, 94vw);
+  max-height: 86vh;
+  overflow-y: auto;
+}
+.bank-preview-figure {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  margin: 14px 0;
+}
+.bank-preview-image {
+  max-width: 100%;
+  max-height: 320px;
+  border-radius: var(--r-tile);
+  border: 1px solid var(--border-mid);
+  cursor: zoom-in;
+}
+.bank-preview-body { display: flex; flex-direction: column; gap: 10px; margin: 14px 0 16px; }
+.bank-preview-body .bank-card-prompt { max-height: 240px; overflow-y: auto; }
+
 </style>
 </head>
 <body>
@@ -1325,7 +1345,7 @@ button { font-family: inherit; cursor: pointer; }
   <footer class="footer">
     <span class="chip-meta">HEBREW UI &middot; ENGLISH PROMPTS</span>
     <span class="chip-meta">NO SERVER &middot; ONE FILE</span>
-    <span class="chip-meta" data-build>BUILD 19.08 08:50</span>
+    <span class="chip-meta" data-build>BUILD 19.08 15:24</span>
   </footer>
 
 </div>
@@ -6667,13 +6687,50 @@ if (typeof globalThis !== 'undefined') {
    read; only the admin writes — enforced by RLS, not by this file. */
 'use strict';
 
+function el(tag, cls, text) {
+  const node = document.createElement(tag);
+  if (cls) node.className = cls;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
+/* A body may carry several model variants, one per [Label] line. Returns one
+   entry per variant, or a single unlabelled entry for a plain body. Shared
+   with the backoffice preview so both show the same thing. */
+function splitVariants(body) {
+  const parts = String(body || '').split(/^\[([^\]\n]{1,40})\]\s*$/m);
+  if (parts.length > 1 && !parts[0].trim()) {
+    const out = [];
+    for (let i = 1; i < parts.length; i += 2) {
+      const text = (parts[i + 1] || '').trim();
+      if (text) out.push({ label: parts[i].trim(), text });
+    }
+    if (out.length) return out;
+  }
+  return [{ label: null, text: String(body || '') }];
+}
+
+/* clipboard with the textarea fallback: a file:// page has no clipboard API */
+function copyButton(text, label) {
+  const btn = el('button', 'btn-run bank-copy', label);
+  btn.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const area = document.createElement('textarea');
+      area.value = text;
+      document.body.append(area);
+      area.select();
+      document.execCommand('copy');
+      area.remove();
+    }
+    btn.textContent = 'הועתק ✓';
+    setTimeout(() => { btn.textContent = label; }, 1400);
+  });
+  return btn;
+}
+
 function initBank(container, lib, authApi) {
-  const el = (tag, cls, text) => {
-    const node = document.createElement(tag);
-    if (cls) node.className = cls;
-    if (text !== undefined) node.textContent = text;
-    return node;
-  };
 
   const panel = el('section', 'panel');
   container.append(panel);
@@ -6714,46 +6771,17 @@ function initBank(container, lib, authApi) {
       body.append(el('h3', 'bank-card-title', row.title));
       if (row.notes) body.append(el('p', 'bank-card-notes', row.notes));
 
-      const copyButton = (text, label) => {
-        const btn = el('button', 'btn-run bank-copy', label);
-        btn.addEventListener('click', async () => {
-          try {
-            await navigator.clipboard.writeText(text);
-          } catch {
-            const area = document.createElement('textarea');
-            area.value = text;
-            document.body.append(area);
-            area.select();
-            document.execCommand('copy');
-            area.remove();
-          }
-          btn.textContent = 'הועתק ✓';
-          setTimeout(() => { btn.textContent = label; }, 1400);
-        });
-        return btn;
-      };
-
-      /* a body may carry several model variants, one per [Label] section;
-         a plain body renders as a single prompt with a single copy button */
-      const sections = row.body.split(/^\[([^\]\n]{1,40})\]\s*$/m);
-      if (sections.length > 1 && !sections[0].trim()) {
-        for (let i = 1; i < sections.length; i += 2) {
-          const label = sections[i].trim();
-          const text = (sections[i + 1] || '').trim();
-          if (!text) continue;
+      for (const variant of splitVariants(row.body)) {
+        if (variant.label) {
           const head = el('div', 'bank-variant-head');
-          head.append(el('span', 'chip-meta', label));
-          head.append(copyButton(text, 'העתקה'));
+          head.append(el('span', 'chip-meta', variant.label));
+          head.append(copyButton(variant.text, 'העתקה'));
           body.append(head);
-          const promptBox = el('pre', 'prompt-box mono bank-card-prompt');
-          promptBox.textContent = text;
-          body.append(promptBox);
         }
-      } else {
         const promptBox = el('pre', 'prompt-box mono bank-card-prompt');
-        promptBox.textContent = row.body;
+        promptBox.textContent = variant.text;
         body.append(promptBox);
-        body.append(copyButton(row.body, 'העתקת הפרומפט'));
+        if (!variant.label) body.append(copyButton(variant.text, 'העתקת הפרומפט'));
       }
       card.append(body);
 
@@ -6773,7 +6801,7 @@ function initBank(container, lib, authApi) {
   return { refresh };
 }
 
-const BANK = { initBank };
+const BANK = { initBank, splitVariants, copyButton };
 if (typeof module !== 'undefined') module.exports = BANK;
 if (typeof globalThis !== 'undefined') {
   globalThis.PM = Object.assign(globalThis.PM || {}, BANK);
@@ -7031,6 +7059,73 @@ function initAdmin(container, lib, authApi) {
     saveBtn.disabled = false;
   });
 
+  /* Preview: the row as a student sees it, thumbnail and all, with the same
+     copy buttons. Built from the shared bank helpers so the backoffice can
+     never drift from the student view. */
+  let previewOverlay = null;
+  const closePreview = () => {
+    if (previewOverlay) { previewOverlay.remove(); previewOverlay = null; }
+  };
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') closePreview();
+  });
+
+  function openPreview(row) {
+    closePreview();
+    previewOverlay = el('div', 'auth-overlay');
+    previewOverlay.addEventListener('click', (event) => {
+      if (event.target === previewOverlay) closePreview();
+    });
+    const panel = el('section', 'panel bank-preview-panel');
+    previewOverlay.append(panel);
+    document.body.append(previewOverlay);
+
+    const header = el('div', 'panel-header');
+    header.append(el('span', 'panel-title', row.title));
+    header.append(el('span', 'chip-meta',
+      `${row.body.length.toLocaleString('en')} תווים`));
+    panel.append(header);
+
+    if (row.image_path) {
+      const figure = el('div', 'bank-preview-figure');
+      const img = el('img', 'bank-preview-image');
+      img.alt = row.title;
+      img.src = backend.imageUrl(row.image_path);
+      /* the stored file opens full size in its own tab */
+      img.addEventListener('click', () => {
+        window.open(backend.imageUrl(row.image_path), '_blank', 'noopener');
+      });
+      figure.append(img);
+      figure.append(el('span', 'chip-meta', 'לחיצה על התמונה פותחת אותה בגודל מלא'));
+      panel.append(figure);
+    }
+
+    if (row.notes) panel.append(el('p', 'section-hint', row.notes));
+
+    const body = el('div', 'bank-preview-body');
+    for (const variant of globalThis.PM.splitVariants(row.body)) {
+      if (variant.label) {
+        const head = el('div', 'bank-variant-head');
+        head.append(el('span', 'chip-meta', variant.label));
+        head.append(globalThis.PM.copyButton(variant.text, 'העתקה'));
+        body.append(head);
+      }
+      const box = el('pre', 'prompt-box mono bank-card-prompt');
+      box.textContent = variant.text;
+      body.append(box);
+      if (!variant.label) {
+        body.append(globalThis.PM.copyButton(variant.text, 'העתקת הפרומפט'));
+      }
+    }
+    panel.append(body);
+
+    const footer = el('div', 'button-row');
+    const close = el('button', 'btn-ghost', 'סגירה');
+    close.addEventListener('click', closePreview);
+    footer.append(close);
+    panel.append(footer);
+  }
+
   async function refreshBank() {
     bankList.innerHTML = '';
     bankList.append(el('p', 'section-hint', 'טוען…'));
@@ -7055,6 +7150,8 @@ function initAdmin(container, lib, authApi) {
         + (row.image_path ? ' · עם תמונה' : '')));
       item.append(meta);
       const actions = el('div', 'auth-work-actions');
+      const viewBtn = el('button', 'btn-ghost', 'תצוגה');
+      viewBtn.addEventListener('click', () => openPreview(row));
       const editBtn = el('button', 'btn-ghost', 'עריכה');
       editBtn.addEventListener('click', () => {
         editingId = row.id;
@@ -7079,7 +7176,7 @@ function initAdmin(container, lib, authApi) {
         if (editingId === row.id) resetForm();
         refreshBank();
       });
-      actions.append(editBtn, delBtn);
+      actions.append(viewBtn, editBtn, delBtn);
       item.append(actions);
       bankList.append(item);
     }
