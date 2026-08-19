@@ -1226,6 +1226,24 @@ button { font-family: inherit; cursor: pointer; }
 /* a work the student put in the class gallery */
 .auth-shared { color: var(--cyan-bright); border-color: var(--cyan-border); }
 
+/* ---- "I am attaching a reference photograph" ---- */
+.attached-ref {
+  margin-top: 14px;
+  padding: 12px 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-tile);
+}
+.attached-ref-row {
+  display: flex; align-items: center; gap: 9px;
+  font-size: 14.5px; font-weight: 600;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.attached-ref-row input { accent-color: var(--cyan); width: 16px; height: 16px; }
+.attached-ref .section-hint { margin: 8px 0 0; }
+.attached-ref-kinds { display: flex; gap: 6px; margin-top: 10px; }
+
 </style>
 </head>
 <body>
@@ -1359,7 +1377,7 @@ button { font-family: inherit; cursor: pointer; }
   <footer class="footer">
     <span class="chip-meta">HEBREW UI &middot; ENGLISH PROMPTS</span>
     <span class="chip-meta">NO SERVER &middot; ONE FILE</span>
-    <span class="chip-meta" data-build>BUILD 19.08 16:32</span>
+    <span class="chip-meta" data-build>BUILD 19.08 16:51</span>
   </footer>
 
 </div>
@@ -1501,6 +1519,31 @@ const RATIO_WORDS = {
   '8:1': 'three stops, deep shadows that keep only a hint of detail',
   '16:1': 'four stops, the shadow side essentially unlit',
 };
+
+/* The user attaches a reference photograph to the prompt in the model's own
+   interface; the file never reaches this application. All the prompt has to
+   do is say the image is there and what to take from it, and, just as
+   important, what NOT to take from it: the reference decides what the
+   subject looks like, and this prompt decides everything else. */
+const ATTACHED_REFERENCE = {
+  person: 'Reproduce the person in it: the same face, hair, build and skin, '
+    + 'unchanged.',
+  product: 'Reproduce the object in it exactly: the same proportions, '
+    + 'materials, colour and finish, with every marking and logo in the same '
+    + 'place.',
+  animal: 'Reproduce the animal in it exactly: the same species, coat pattern, '
+    + 'colour, markings and build.',
+  other: 'Reproduce the subject in it exactly, in every fixed detail.',
+};
+
+function attachedReferenceText(value) {
+  const kind = (typeof value === 'string' ? value : (value && value.kind))
+    || 'other';
+  const clause = ATTACHED_REFERENCE[kind] || ATTACHED_REFERENCE.other;
+  return 'ATTACHED REFERENCE. A reference photograph is attached to this '
+    + `prompt. ${clause} Take the pose, the framing, the lighting and the `
+    + 'background from this prompt and not from the reference image.';
+}
 
 const EQUIPMENT_SENTENCE =
   'Nothing used to make this light is in the picture. A window or lamp the '
@@ -1776,6 +1819,13 @@ function proseSections(ir) {
   if (s.styling) subject += ` ${s.styling}.`;
   sections.push(['subject', subject]);
 
+  /* an identity that already carries its own reference sheet says this in
+     its own section; saying it twice would be two instructions, not one */
+  if (s.attached_reference && !(s.identity && s.identity.reference)) {
+    sections.push(['attached_reference',
+      attachedReferenceText(s.attached_reference)]);
+  }
+
   if (s.identity) {
     const id = s.identity;
     const traits = id.traits.join('; ');
@@ -1994,6 +2044,10 @@ function compileFlux(ir) {
   const out = { type: 'photograph', summary: fluxSummary(ir) };
 
   put(out, 'subject', s.subject, 'subject');
+  if (s.attached_reference && !(s.identity && s.identity.reference)) {
+    out.attached_reference = attachedReferenceText(s.attached_reference)
+      .replace(/^ATTACHED REFERENCE\. /, '');
+  }
   put(out, 'secondary_subjects', s.secondary_subjects);
   put(out, 'styling', s.styling);
   if (s.identity) {
@@ -2159,6 +2213,7 @@ const COMPILER = {
   compile, normalizeSpec, buildIR, proseSections, resolveRig, buildNegatives,
   RATIO_WORDS, EQUIPMENT_SENTENCE, FACE_GENRES, DIALECTS, MJ_LIMIT,
   GPT_PREAMBLE, GPT_IDENTITY_PREAMBLE, JSON_NAMES,
+  ATTACHED_REFERENCE, attachedReferenceText,
 };
 
 if (typeof module !== 'undefined') module.exports = COMPILER;
@@ -3469,7 +3524,80 @@ function attachPopover(trigger, content, opts = {}) {
   }
 }
 
-const OUTPUT = { createOutputPane, explainToggle, attachPopover, hidePopover };
+
+/* ---- "I am attaching a reference photograph" --------------------------
+   The file itself never reaches this application and is never uploaded:
+   the user drops it into the model's own interface. All this control does
+   is put a sentence in the prompt telling the model that an image is
+   attached and what to take from it. Shared by the quick path, the
+   professional form and the identity screen so the wording and the
+   behaviour are the same in all three. */
+
+const ATTACHED_KINDS = [
+  ['person', 'אדם'],
+  ['product', 'מוצר'],
+  ['animal', 'בעל חיים'],
+  ['other', 'אחר'],
+];
+
+function attachedReferenceControl(current, onChange) {
+  const el = (tag, cls, text) => {
+    const node = document.createElement(tag);
+    if (cls) node.className = cls;
+    if (text !== undefined) node.textContent = text;
+    return node;
+  };
+
+  const wrap = el('div', 'attached-ref');
+  const row = el('label', 'attached-ref-row');
+  const box = el('input');
+  box.type = 'checkbox';
+  box.checked = !!current;
+  row.append(box);
+  row.append(el('span', '', 'מצרפים תמונת ייחוס לפרומפט'));
+  wrap.append(row);
+
+  const hint = el('p', 'section-hint',
+    'התמונה לא נשמרת ולא נשלחת לשום מקום. מסמנים כאן, מצרפים את התמונה '
+    + 'במודל עצמו, והפרומפט יגיד לו לשמור על הנושא שבתמונה ולקחת ממנו רק '
+    + 'את המראה, בעוד התאורה, המסגור והרקע נקבעים כאן.');
+  wrap.append(hint);
+
+  const kinds = el('div', 'seg attached-ref-kinds');
+  const currentKind = (typeof current === 'string' ? current
+    : (current && current.kind)) || 'person';
+
+  const paint = () => {
+    kinds.hidden = !box.checked;
+    for (const btn of kinds.querySelectorAll('button')) {
+      btn.classList.toggle('active', btn.dataset.kind === chosen);
+    }
+  };
+
+  let chosen = currentKind;
+  for (const [key, label] of ATTACHED_KINDS) {
+    const btn = el('button', 'seg-btn', label);
+    btn.type = 'button';
+    btn.dataset.kind = key;
+    btn.addEventListener('click', () => {
+      chosen = key;
+      paint();
+      onChange({ kind: chosen });
+    });
+    kinds.append(btn);
+  }
+  wrap.append(kinds);
+
+  box.addEventListener('change', () => {
+    paint();
+    onChange(box.checked ? { kind: chosen } : null);
+  });
+  paint();
+  return wrap;
+}
+
+const OUTPUT = { createOutputPane, explainToggle, attachPopover, hidePopover,
+                 attachedReferenceControl, ATTACHED_KINDS };
 if (typeof module !== 'undefined') module.exports = OUTPUT;
 if (typeof globalThis !== 'undefined') {
   globalThis.PM = Object.assign(globalThis.PM || {}, OUTPUT);
@@ -3572,6 +3700,7 @@ function initQuick(root, lib, hooks = {}) {
   const state = {
     recipe: quick._order[0],
     subject: null, environment: null, mood: null, moment: null, aspect: null,
+    attachedReference: null,   /* {kind} when the user attaches a photo */
     typedSubject: '', typedEnvironment: '', typedMood: '', typedMoment: '',
     expanded: { subject: false, environment: false, mood: false, moment: false },
   };
@@ -3604,7 +3733,9 @@ function initQuick(root, lib, hooks = {}) {
       typedMood: typedEnglish('typedMood').text,
       typedMoment: typedEnglish('typedMoment').text,
     };
-    return compose(quick, state.recipe, choices);
+    const composed = compose(quick, state.recipe, choices);
+    if (state.attachedReference) composed.attached_reference = state.attachedReference;
+    return composed;
   }
 
   root.innerHTML = '';
@@ -3696,6 +3827,13 @@ function initQuick(root, lib, hooks = {}) {
   explainFor('aspect', aspectPane);
   const aspectRow = el('div', 'segmented aspect-row');
   aspectPane.append(aspectRow);
+
+  /* the subject step is where "I have a photo of it" belongs */
+  subjectPane.append(globalThis.PM.attachedReferenceControl(
+    state.attachedReference, (value) => {
+      state.attachedReference = value;
+      render();
+    }));
 
   const PANES = [recipePane, subjectPane, envPane, moodPane, momentPane, aspectPane];
   const STEP_NAMES = ['מה מצלמים', 'הנושא', 'הסביבה', 'אווירה ואור', 'הרגע', 'יחס תמונה'];
@@ -4561,6 +4699,11 @@ function initForm(root, lib, hooks = {}) {
           'subject_secondary'),
         numField('subject.scale_cm', 'גודל הנושא בס"מ', 'subject_scale_cm'),
       );
+      groupPane.append(globalThis.PM.attachedReferenceControl(
+        spec.attached_reference, (value) => {
+          spec.attached_reference = value || undefined;
+          render();
+        }));
     },
     moment() {
       const fields = [
@@ -5052,8 +5195,11 @@ function initForm(root, lib, hooks = {}) {
       activeGroup = 'basis';
       render();
     },
-    setIdentity(identity, seed) {
+    setIdentity(identity, seed, attachedReference) {
       spec.identity = identity;
+      if (attachedReference !== undefined) {
+        spec.attached_reference = attachedReference || undefined;
+      }
       if (seed) {
         spec.generation = { ...(spec.generation || {}), seeds: [Number(seed)] };
       }
@@ -5152,6 +5298,7 @@ function initIdentity(root, lib, hooks = {}) {
     traits: {},          /* guided field key -> english value */
     extraTraits: [],
     reference: '',
+    attachedReference: null,
     refReport: null,
     refUrl: null,
     seed: '',
@@ -5201,12 +5348,19 @@ function initIdentity(root, lib, hooks = {}) {
     };
   }
 
+  function withAttached(spec) {
+    if (spec && state.attachedReference) {
+      spec.attached_reference = state.attachedReference;
+    }
+    return spec;
+  }
+
   function sheetSpec() {
     const data = kindData();
     if (!data || !currentTraits().length) return null;
     const noun = state.kind === 'custom'
       ? (translate(state.customKind) || 'subject') : data.sheet.noun;
-    return composeSheet(data, identityObject(), currentViews(), noun);
+    return withAttached(composeSheet(data, identityObject(), currentViews(), noun));
   }
 
   root.innerHTML = '';
@@ -5220,7 +5374,8 @@ function initIdentity(root, lib, hooks = {}) {
         label: 'החלת הדמות על הטופס המקצועי',
         onClick: () => {
           if (hooks.applyToPro && currentTraits().length) {
-            hooks.applyToPro(identityObject(), state.seed, state.refReport);
+            hooks.applyToPro(identityObject(), state.seed, state.refReport,
+                             state.attachedReference);
           }
         },
       },
@@ -5566,6 +5721,14 @@ function initIdentity(root, lib, hooks = {}) {
         seen.append(measured);
         stepPane.append(seen);
       }
+
+      /* the shortcut: a photo the user already has, attached in the model
+         itself, with no sheet to render and nothing to upload here */
+      stepPane.append(globalThis.PM.attachedReferenceControl(
+        state.attachedReference, (value) => {
+          state.attachedReference = value;
+          render(false);
+        }));
 
       stepPane.append(el('div', 'panel-label', 'שם קובץ הרפרנס (אחרי שתריץ את הלוח)'));
       const refInput = el('input', 'free-text');
@@ -7450,8 +7613,8 @@ if (Object.keys(LIB).length) {
     },
   });
   globalThis.PM.initIdentity(document.getElementById('identity-root'), LIB, {
-    applyToPro(identity, seed, refReport) {
-      formApi.setIdentity(identity, seed);
+    applyToPro(identity, seed, refReport, attachedReference) {
+      formApi.setIdentity(identity, seed, attachedReference);
       /* a reference measured on the identity screen keeps travelling: the
          form opens on it, with the offers waiting to be accepted */
       if (refReport) formApi.applyReference(refReport);
