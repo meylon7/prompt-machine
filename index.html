@@ -1325,7 +1325,7 @@ button { font-family: inherit; cursor: pointer; }
   <footer class="footer">
     <span class="chip-meta">HEBREW UI &middot; ENGLISH PROMPTS</span>
     <span class="chip-meta">NO SERVER &middot; ONE FILE</span>
-    <span class="chip-meta" data-build>BUILD 18.08 20:37</span>
+    <span class="chip-meta" data-build>BUILD 19.08 08:50</span>
   </footer>
 
 </div>
@@ -1862,67 +1862,184 @@ function compileGpt(ir) {
   return lines.join('\n');
 }
 
+/* A library key is an identifier, not a sentence. The prose dialects run
+   every one of them through words(); the JSON dialect has to do the same or
+   the model is handed "full_frame_mirrorless" as tokens it never saw written
+   that way. Where the identifier is still not English on its own, a name is
+   given here, next to the other prompt wording. A key with no entry falls
+   back to words(), and a test asserts every library key is covered. */
+const JSON_NAMES = {
+  environment: {
+    studio_cyc: 'a studio with a seamless background',
+    studio_tabletop: 'a studio tabletop set',
+    location_interior: 'an interior location',
+    location_exterior: 'an exterior location',
+  },
+  format: {
+    '44x33': 'medium format 44x33mm',
+    '36x24': 'full frame 36x24mm',
+    '24x16': 'aps-c 24x16mm',
+    '4x5in': 'large format 4x5 inch',
+    '6x6': '6x6 medium format film',
+  },
+  body_class: {
+    aps_c: 'aps-c',
+    '35mm_film': '35mm film',
+  },
+};
+
+function plainWords(kind, value) {
+  if (value === undefined || value === null || value === '') return value;
+  const named = JSON_NAMES[kind] && JSON_NAMES[kind][value];
+  return named !== undefined ? named : words(value);
+}
+
+/* undecided travels as the same bracketed placeholder the prose uses, so an
+   unfilled field is visible instead of silently missing; an authored empty
+   value means "none" and is left out entirely, because an empty field costs
+   the model attention and carries nothing. */
+function put(target, key, value, name) {
+  if (value === undefined || value === null) {
+    if (name) target[key] = `[${name}]`;
+    return target;
+  }
+  if (value === '' || (Array.isArray(value) && value.length === 0)) return target;
+  target[key] = value;
+  return target;
+}
+
+/* A distance in centimetres is precise for us and close to meaningless for a
+   model that never saw centimetre labels. The number stays, and the sentence
+   that says what the number does travels with it. */
+function backgroundText(set) {
+  const base = set.background;
+  if (base === undefined || base === null || base === '') return base;
+  if (!(set.background_distance_cm > 0)) return base;
+  return `${base}, ${set.background_distance_cm}cm behind the subject so it `
+    + 'takes clearly less light than the subject';
+}
+
+/* One plain sentence at the top. A model that reads JSON as a specification
+   uses the fields; a model that reads it as language has something whole to
+   hold on to. The same facts, said once in prose, so the payload degrades
+   gracefully instead of breaking. */
+function fluxSummary(ir) {
+  const s = ir.spec;
+  const cam = s.camera;
+  const key = ir.rig.lights.find((l) => l.role === 'key');
+  const sentences = [];
+
+  const subject = (s.subject || '[subject]').split(',')[0].trim();
+  const place = s.set.environment
+    ? ` in ${plainWords('environment', s.set.environment)}` : '';
+  sentences.push(`A photograph of ${subject}${place}`);
+
+  if (key) {
+    sentences.push(`key light ${P.azimuthWords(key.azimuth_deg)}, `
+      + `${P.elevationWords(key.elevation_deg)}`
+      + (ir.rig.ratio ? `, ratio ${ir.rig.ratio}` : ''));
+  }
+
+  const camBits = [];
+  if (cam.focal_length_mm) camBits.push(`${cam.focal_length_mm}mm`);
+  if (cam.aperture) camBits.push(`at ${cam.aperture}`);
+  if (cam.format) camBits.push(`on ${plainWords('format', cam.format)}`);
+  if (camBits.length) sentences.push(camBits.join(' '));
+
+  if (ir.dof && ir.dof.total_cm != null) {
+    sentences.push(`sharp zone ${ir.dof.total_cm}cm deep`
+      + (cam.focus_point ? ` on ${cam.focus_point}` : ''));
+  }
+  const cap = (text) => text.charAt(0).toUpperCase() + text.slice(1);
+  return `${sentences.map(cap).join('. ')}.`;
+}
+
 function compileFlux(ir) {
   const s = ir.spec;
-  const out = {
-    type: 'photograph',
-    subject: s.subject,
-    secondary_subjects: s.secondary_subjects || [],
-    styling: s.styling || '',
-  };
-  if (s.identity) {
-    out.identity = { reference: s.identity.reference, traits: s.identity.traits };
-  }
-  out.set = {
-    background: s.set.background,
-    background_distance_cm: s.set.background_distance_cm,
-    surface: s.set.surface,
-    props: s.set.props || [],
-    environment: s.set.environment,
-  };
-  out.composition = {
-    layout: s.composition.layout,
-    subject_placement: s.composition.subject_placement,
-    negative_space: s.composition.negative_space,
-    horizon_or_table_line: s.composition.horizon_or_table_line,
-  };
-  if (ir.moment) out.moment = ir.moment;
-  out.lighting = {
-    plot: ir.plot,
-    consequences: ir.consequences,
-    ratio: ir.rig.ratio,
-    ambient: ir.rig.ambient,
-    equipment_visibility: EQUIPMENT_SENTENCE,
-  };
-  out.materials = ir.materials;
   const cam = s.camera;
-  out.camera = {
-    body_class: cam.body_class,
-    format: cam.format,
-    focal_length_mm: cam.focal_length_mm,
-    aperture: cam.aperture,
-    subject_distance_cm: cam.subject_distance_cm,
-    height_cm: cam.height_cm,
-  };
-  if (cam.tilt_deg !== undefined) out.camera.tilt_deg = cam.tilt_deg;
-  out.camera.shutter = cam.shutter;
-  out.camera.iso = cam.iso;
-  out.camera.focus_point = cam.focus_point;
-  out.camera.aspect_ratio = cam.aspect_ratio;
-  out.camera.shot_size = cam.shot_size;
+  const out = { type: 'photograph', summary: fluxSummary(ir) };
+
+  put(out, 'subject', s.subject, 'subject');
+  put(out, 'secondary_subjects', s.secondary_subjects);
+  put(out, 'styling', s.styling);
+  if (s.identity) {
+    const identity = {};
+    put(identity, 'reference', s.identity.reference);
+    put(identity, 'traits', s.identity.traits);
+    out.identity = identity;
+  }
+
+  const set = {};
+  put(set, 'background', backgroundText(s.set), 'background');
+  put(set, 'background_distance_cm', s.set.background_distance_cm);
+  put(set, 'surface', s.set.surface);
+  put(set, 'props', s.set.props);
+  put(set, 'environment', plainWords('environment', s.set.environment));
+  out.set = set;
+
+  const composition = {};
+  put(composition, 'layout', s.composition.layout, 'layout');
+  put(composition, 'subject_placement', s.composition.subject_placement,
+      'subject placement');
+  put(composition, 'negative_space', s.composition.negative_space,
+      'negative space');
+  put(composition, 'horizon_or_table_line', s.composition.horizon_or_table_line,
+      'horizon or table line');
+  out.composition = composition;
+
+  if (ir.moment) out.moment = ir.moment;
+
+  const lighting = {};
+  put(lighting, 'plot', ir.plot);
+  put(lighting, 'consequences', ir.consequences);
+  put(lighting, 'ratio', ir.rig.ratio, 'key to fill ratio');
+  put(lighting, 'ratio_meaning', RATIO_WORDS[ir.rig.ratio]);
+  put(lighting, 'ambient', plainWords('ambient', ir.rig.ambient), 'ambient');
+  lighting.equipment_visibility = EQUIPMENT_SENTENCE;
+  out.lighting = lighting;
+
+  put(out, 'materials', ir.materials);
+
+  const camera = {};
+  put(camera, 'body_class', plainWords('body_class', cam.body_class),
+      'camera body');
+  put(camera, 'format', plainWords('format', cam.format), 'format');
+  put(camera, 'focal_length_mm', cam.focal_length_mm, 'focal length');
+  put(camera, 'aperture', cam.aperture, 'aperture');
+  put(camera, 'subject_distance_cm', cam.subject_distance_cm, 'distance');
+  put(camera, 'height_cm', cam.height_cm, 'camera height');
+  put(camera, 'tilt_deg', cam.tilt_deg);
+  put(camera, 'shutter', cam.shutter, 'shutter');
+  put(camera, 'iso', cam.iso, 'ISO');
+  put(camera, 'focus_point', cam.focus_point, 'focus point');
+  put(camera, 'aspect_ratio', cam.aspect_ratio, 'aspect ratio');
+  put(camera, 'shot_size', plainWords('shot_size', cam.shot_size));
+  /* what this format and this focal length do to the picture: the prose
+     dialects have always carried it, and it belongs here too */
+  put(camera, 'character', [ir.formatCharacter, ir.focalCharacter]
+    .filter(Boolean).join('. ') || undefined);
+  camera.depth_of_field = dofSentence(ir.dof);
   if (ir.dof) {
-    out.depth_of_field_cm = {
+    camera.depth_of_field_cm = {
       near_cm: ir.dof.near_cm, far_cm: ir.dof.far_cm, total_cm: ir.dof.total_cm,
     };
   }
-  out.capture_character = ir.capture;
-  out.imperfections = ir.imperfections;
-  out.grade = {};
-  for (const key of ['look', 'black_point', 'white_balance_k',
-                     'contrast_curve', 'saturation']) {
-    if (s.grade[key] !== undefined) out.grade[key] = s.grade[key];
-  }
-  out.avoid = ir.negatives;
+  out.camera = camera;
+
+  put(out, 'capture_character', ir.capture);
+  put(out, 'imperfections', ir.imperfections);
+  put(out, 'retouch', ir.retouch);
+
+  const grade = {};
+  put(grade, 'look', s.grade.look, 'grade look');
+  put(grade, 'black_point', s.grade.black_point != null
+    ? words(s.grade.black_point) : null, 'black point');
+  put(grade, 'white_balance_k', s.grade.white_balance_k);
+  put(grade, 'contrast_curve', s.grade.contrast_curve, 'contrast curve');
+  put(grade, 'saturation', s.grade.saturation, 'saturation');
+  out.grade = grade;
+
+  put(out, 'avoid', ir.negatives);
   return JSON.stringify(out, null, 2);
 }
 
@@ -2007,7 +2124,7 @@ function compile(rawSpec, lib, target) {
 const COMPILER = {
   compile, normalizeSpec, buildIR, proseSections, resolveRig, buildNegatives,
   RATIO_WORDS, EQUIPMENT_SENTENCE, FACE_GENRES, DIALECTS, MJ_LIMIT,
-  GPT_PREAMBLE, GPT_IDENTITY_PREAMBLE,
+  GPT_PREAMBLE, GPT_IDENTITY_PREAMBLE, JSON_NAMES,
 };
 
 if (typeof module !== 'undefined') module.exports = COMPILER;
