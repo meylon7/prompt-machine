@@ -142,13 +142,16 @@ button { font-family: inherit; cursor: pointer; }
    --------------------------------------------------------------------- */
 
 .topbar {
-  height: 52px;
+  /* the bar grows instead of pushing buttons off the edge: a navigation
+     item that cannot be seen is the same as one that does not exist */
+  min-height: 52px;
   background: var(--surface-top);
   border-bottom: 1px solid var(--border-subtle);
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 10px;
-  padding-inline: 14px;
+  padding: 7px 14px;
 }
 .app-chip {
   width: 28px; height: 28px;
@@ -167,7 +170,7 @@ button { font-family: inherit; cursor: pointer; }
 .topbar-spacer { margin-inline-start: auto; }
 
 /* mode switch pills, hidden at the gate */
-.mode-switch { display: flex; gap: 6px; }
+.mode-switch { display: flex; flex-wrap: wrap; gap: 6px; }
 .mode-switch .btn-ghost.active {
   color: var(--cyan-bright);
   border-color: var(--cyan-border);
@@ -1356,7 +1359,7 @@ button { font-family: inherit; cursor: pointer; }
   <footer class="footer">
     <span class="chip-meta">HEBREW UI &middot; ENGLISH PROMPTS</span>
     <span class="chip-meta">NO SERVER &middot; ONE FILE</span>
-    <span class="chip-meta" data-build>BUILD 19.08 15:48</span>
+    <span class="chip-meta" data-build>BUILD 19.08 16:32</span>
   </footer>
 
 </div>
