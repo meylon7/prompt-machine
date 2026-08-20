@@ -1396,7 +1396,7 @@ button { font-family: inherit; cursor: pointer; }
   <footer class="footer">
     <span class="chip-meta">HEBREW UI &middot; ENGLISH PROMPTS</span>
     <span class="chip-meta">NO SERVER &middot; ONE FILE</span>
-    <span class="chip-meta" data-build>BUILD 20.08 13:00</span>
+    <span class="chip-meta" data-build>BUILD 20.08 13:08</span>
   </footer>
 
 </div>
@@ -6402,6 +6402,19 @@ function createSupabase(config) {
     async fetchProfile() {
       const rows = await request('/rest/v1/profiles'
         + `?id=eq.${encodeURIComponent(session.user.id)}&select=blocked,is_admin`);
+      /* A user with no profile row can sign in and do nothing else, because
+         every policy leans on is_active() and that is false without a row.
+         It should never happen, the trigger creates one; when it does, the
+         account repairs itself instead of failing silently forever. */
+      if (!rows[0]) {
+        try {
+          await request('/rest/v1/profiles', {
+            method: 'POST',
+            body: { id: session.user.id, email: session.user.email,
+                    name: session.user.name || '' },
+          });
+        } catch { /* an older database has no policy for this; carry on */ }
+      }
       const profile = rows[0] || { blocked: false, is_admin: false };
       session.user.blocked = profile.blocked;
       session.user.is_admin = profile.is_admin;
