@@ -1244,6 +1244,17 @@ button { font-family: inherit; cursor: pointer; }
 .attached-ref .section-hint { margin: 8px 0 0; }
 .attached-ref-kinds { display: flex; gap: 6px; margin-top: 10px; }
 
+/* ---- ideas for improving the system ---- */
+.idea-author { display: flex; align-items: center; gap: 8px; margin: 14px 0 6px; }
+.idea-author-name { color: var(--cyan-bright); }
+.idea-text { width: 100%; resize: vertical; min-height: 110px; line-height: 1.6; }
+.idea-row { align-items: flex-start; }
+.idea-body {
+  font-size: 14.5px; line-height: 1.55;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+}
+
 </style>
 </head>
 <body>
@@ -1267,6 +1278,7 @@ button { font-family: inherit; cursor: pointer; }
       <button class="btn-ghost" data-goto="examples">דוגמאות</button>
       <button class="btn-ghost" data-goto="bank" data-bank-btn hidden>בנק פרומפטים</button>
       <button class="btn-ghost" data-goto="shared" data-bank-btn hidden>עבודות משותפות</button>
+      <button class="btn-ghost" data-goto="ideas" data-bank-btn hidden>רעיונות</button>
       <button class="btn-ghost" data-goto="explain">איך זה עובד</button>
       <button class="btn-ghost" data-goto="admin" data-admin-btn hidden>ניהול</button>
       <button class="btn-ghost" data-goto="gate">שער</button>
@@ -1325,6 +1337,8 @@ button { font-family: inherit; cursor: pointer; }
       <button class="gate-link" data-goto="bank" data-bank-btn hidden>בנק פרומפטים לשימוש</button>
       <span class="gate-link-sep" data-bank-btn hidden aria-hidden="true">·</span>
       <button class="gate-link" data-goto="shared" data-bank-btn hidden>עבודות משותפות</button>
+      <span class="gate-link-sep" data-bank-btn hidden aria-hidden="true">·</span>
+      <button class="gate-link" data-goto="ideas" data-bank-btn hidden>רעיונות לשיפור</button>
     </div>
     <div class="gate-links" data-admin-btn hidden>
       <button class="gate-card gate-admin-card" data-goto="admin">
@@ -1369,6 +1383,11 @@ button { font-family: inherit; cursor: pointer; }
     <div id="shared-root"></div>
   </main>
 
+  <!-- ================= ideas ================= -->
+  <main class="view view-wide" data-view="ideas" hidden>
+    <div id="ideas-root"></div>
+  </main>
+
   <!-- ================= admin ================= -->
   <main class="view view-wide" data-view="admin" hidden>
     <div id="admin-root"></div>
@@ -1377,7 +1396,7 @@ button { font-family: inherit; cursor: pointer; }
   <footer class="footer">
     <span class="chip-meta">HEBREW UI &middot; ENGLISH PROMPTS</span>
     <span class="chip-meta">NO SERVER &middot; ONE FILE</span>
-    <span class="chip-meta" data-build>BUILD 19.08 17:04</span>
+    <span class="chip-meta" data-build>BUILD 20.08 12:05</span>
   </footer>
 
 </div>
@@ -6405,6 +6424,7 @@ function createSupabase(config) {
         } catch (err) {
           if (!err || err.status !== 400) throw err;
           backend.sharingReady = false;
+          localStorage.setItem('pm_sharing', 'off');
         }
       }
       return request(`${base}&select=id,name,updated_at`);
@@ -6434,7 +6454,11 @@ function createSupabase(config) {
     /* the class gallery: only rows a student chose to share. The filter is
        a convenience for the query; the database returns nothing else even
        without it, because the select policy allows only shared rows. */
-    sharingReady: true,
+    /* Whether the database knows about sharing yet. The answer is stable,
+       so it is remembered: without this every single open of the panel pays
+       for one doomed request first, and the list sits on "loading" for
+       seconds while it fails. */
+    sharingReady: localStorage.getItem('pm_sharing') !== 'off',
     async listShared() {
       await ensureFresh();
       return request('/rest/v1/saved_shots'
@@ -6453,6 +6477,27 @@ function createSupabase(config) {
     async deleteShot(id) {
       await ensureFresh();
       return request(`/rest/v1/saved_shots?id=eq.${encodeURIComponent(id)}`,
+        { method: 'DELETE' });
+    },
+
+    /* ---- ideas for improving the system ----
+       A student reads their own; the teacher reads everyone's. That
+       difference is a row level security policy, not a query parameter. */
+    async listIdeas() {
+      await ensureFresh();
+      return request('/rest/v1/ideas'
+        + '?select=id,text,author_name,created_at,user_id&order=created_at.desc');
+    },
+    async addIdea(text, authorName) {
+      await ensureFresh();
+      return request('/rest/v1/ideas', {
+        method: 'POST',
+        body: { text, author_name: authorName },
+      });
+    },
+    async deleteIdea(id) {
+      await ensureFresh();
+      return request(`/rest/v1/ideas?id=eq.${encodeURIComponent(id)}`,
         { method: 'DELETE' });
     },
 
@@ -6983,6 +7028,13 @@ function initBank(container, lib, authApi) {
   header.append(el('span', 'panel-title', 'בנק פרומפטים לשימוש'));
   const countChip = el('span', 'chip-meta', '');
   header.append(countChip);
+  /* two screens carry the word "bank": this one, which students read, and
+     the backoffice, where prompts are written. The teacher lands here by
+     habit and finds no form, so the way across is on the screen itself. */
+  const toAdmin = el('button', 'btn-ghost', 'הוספה ועריכה בבק-אופיס');
+  toAdmin.dataset.goto = 'admin';
+  toAdmin.hidden = true;
+  header.append(toAdmin);
   panel.append(header);
 
   panel.append(el('p', 'section-hint',
@@ -6993,6 +7045,7 @@ function initBank(container, lib, authApi) {
   panel.append(list);
 
   async function refresh() {
+    toAdmin.hidden = !authApi.isAdmin;
     list.innerHTML = '';
     list.append(el('p', 'section-hint', 'טוען…'));
     let rows;
@@ -7164,6 +7217,137 @@ if (typeof globalThis !== 'undefined') {
   globalThis.PM = Object.assign(globalThis.PM || {}, SHARED);
 }
 
+/* Prompt Machine, "רעיונות לשיפור": anyone signed in writes an idea, and
+   sees the ideas they wrote. Only the teacher sees everybody's, and that
+   is a row level security policy in the database rather than a filter in
+   this file: the browser could ask for every row and would still be handed
+   only its own. */
+'use strict';
+
+function initIdeas(container, lib, authApi) {
+  const el = (tag, cls, text) => {
+    const node = document.createElement(tag);
+    if (cls) node.className = cls;
+    if (text !== undefined) node.textContent = text;
+    return node;
+  };
+
+  const panel = el('section', 'panel');
+  container.append(panel);
+
+  const header = el('div', 'panel-header');
+  header.append(el('span', 'panel-title', 'רעיונות לשיפור המערכת'));
+  panel.append(header);
+
+  panel.append(el('p', 'section-hint',
+    'מה היה עוזר לכם, מה חסר, ומה מבלבל. הרעיונות נקראים, וזה המקום '
+    + 'להשפיע על מה ייבנה הלאה.'));
+
+  const who = el('div', 'idea-author');
+  who.append(el('span', 'panel-label', 'נשלח בשם'));
+  const name = el('span', 'chip-meta idea-author-name', '');
+  who.append(name);
+  panel.append(who);
+
+  const area = el('textarea', 'free-text idea-text');
+  area.rows = 5;
+  area.maxLength = 4000;
+  area.placeholder = 'הרעיון שלכם, בעברית. ככל שיהיה מוחשי יותר כך קל יותר לבנות אותו…';
+  panel.append(area);
+
+  const notice = el('p', 'auth-notice');
+  panel.append(notice);
+
+  const row = el('div', 'button-row');
+  const send = el('button', 'btn-run', 'שליחת הרעיון');
+  row.append(send);
+  panel.append(row);
+
+  const mineTitle = el('div', 'panel-label', 'הרעיונות ששלחתי');
+  panel.append(mineTitle);
+  const list = el('div', 'auth-work-list');
+  panel.append(list);
+
+  const when = (stamp) => {
+    try { return new Date(stamp).toLocaleDateString('he-IL'); } catch { return ''; }
+  };
+
+  send.addEventListener('click', async () => {
+    const text = area.value.trim();
+    if (text.length < 2) {
+      notice.textContent = 'צריך לכתוב משהו לפני השליחה';
+      notice.className = 'auth-notice error';
+      return;
+    }
+    send.disabled = true;
+    try {
+      await authApi.backend.addIdea(text, authApi.displayName());
+      area.value = '';
+      notice.textContent = 'נשלח, תודה';
+      notice.className = 'auth-notice ok';
+      await refresh();
+    } catch (err) {
+      notice.className = 'auth-notice error';
+      notice.textContent = err && err.status === 404
+        ? 'המסך הזה עדיין לא הופעל במסד הנתונים.'
+        : 'השליחה נכשלה. נסו שוב.';
+    }
+    send.disabled = false;
+  });
+
+  async function refresh() {
+    name.textContent = authApi.displayName ? authApi.displayName() : '';
+    list.innerHTML = '';
+    list.append(el('p', 'section-hint', 'טוען…'));
+    let rows;
+    try {
+      rows = await authApi.backend.listIdeas();
+    } catch (err) {
+      list.innerHTML = '';
+      list.append(el('p', 'rule-note', err && (err.status === 404 || err.status === 400)
+        ? 'המסך הזה עדיין לא הופעל במסד הנתונים.'
+        : 'לא הצלחנו לטעון. נסו לרענן.'));
+      return;
+    }
+    list.innerHTML = '';
+    /* the teacher reaches this screen too, and here it shows only their own:
+       everybody's ideas live in the backoffice */
+    const me = authApi.session && authApi.session.user.id;
+    const mine = rows.filter((r) => r.user_id === me);
+    if (!mine.length) {
+      list.append(el('p', 'section-hint', 'עוד לא שלחתם רעיון.'));
+      return;
+    }
+    for (const idea of mine) {
+      const item = el('div', 'auth-work-row idea-row');
+      const meta = el('div', 'auth-work-meta');
+      meta.append(el('span', 'idea-body', idea.text));
+      meta.append(el('span', 'chip-meta', when(idea.created_at)));
+      item.append(meta);
+      const del = el('button', 'btn-ghost auth-danger', 'מחיקה');
+      del.addEventListener('click', async () => {
+        if (del.dataset.arm !== '1') {
+          del.dataset.arm = '1'; del.textContent = 'לאשר?'; return;
+        }
+        try { await authApi.backend.deleteIdea(idea.id); item.remove(); }
+        catch { del.textContent = 'לא הצלחנו'; }
+      });
+      const actions = el('div', 'auth-work-actions');
+      actions.append(del);
+      item.append(actions);
+      list.append(item);
+    }
+  }
+
+  return { refresh };
+}
+
+const IDEAS = { initIdeas };
+if (typeof module !== 'undefined') module.exports = IDEAS;
+if (typeof globalThis !== 'undefined') {
+  globalThis.PM = Object.assign(globalThis.PM || {}, IDEAS);
+}
+
 /* Prompt Machine — the backoffice. Two tabs: students (block / unblock /
    wipe their cloud work) and the prompt bank (add / edit / remove prompts,
    each with an optional example image).
@@ -7195,7 +7379,8 @@ function initAdmin(container, lib, authApi) {
   panel.append(tabs);
   const panes = {};
   let activeTab = 'users';
-  for (const [key, label] of [['users', 'תלמידים'], ['bank', 'בנק הפרומפטים']]) {
+  for (const [key, label] of [['users', 'תלמידים'], ['bank', 'בנק הפרומפטים'],
+                            ['ideas', 'רעיונות מהתלמידים']]) {
     const tab = el('button', 'tab', label);
     tab.dataset.tab = key;
     tab.addEventListener('click', () => { activeTab = key; showTab(); });
@@ -7539,9 +7724,62 @@ function initAdmin(container, lib, authApi) {
     }
   }
 
+  /* ---- ideas: every student's, which only this screen shows ---- */
+  const ideasPane = panes.ideas;
+  ideasPane.append(el('p', 'section-hint',
+    'מה שהתלמידים כתבו במסך "רעיונות לשיפור". כל אחד מהם רואה רק את שלו, '
+    + 'והמסך הזה הוא היחיד שמרכז את כולם.'));
+  const ideasCount = el('p', 'chip-meta', '');
+  ideasPane.append(ideasCount);
+  const ideasList = el('div', 'auth-work-list');
+  ideasPane.append(ideasList);
+
+  async function refreshIdeas() {
+    ideasList.innerHTML = '';
+    ideasList.append(el('p', 'section-hint', 'טוען…'));
+    let rows;
+    try {
+      rows = await backend.listIdeas();
+    } catch (err) {
+      ideasList.innerHTML = '';
+      ideasList.append(el('p', 'rule-note',
+        err && (err.status === 404 || err.status === 400)
+          ? 'הטבלה עדיין לא קיימת. יש להריץ את supabase/setup4_ideas.sql.'
+          : 'טעינת הרעיונות נכשלה. נסו לרענן.'));
+      return;
+    }
+    ideasList.innerHTML = '';
+    ideasCount.textContent = `${rows.length} רעיונות`;
+    if (!rows.length) {
+      ideasList.append(el('p', 'section-hint', 'עוד לא נשלחו רעיונות.'));
+      return;
+    }
+    for (const idea of rows) {
+      const item = el('div', 'auth-work-row idea-row');
+      const meta = el('div', 'auth-work-meta');
+      meta.append(el('span', 'idea-body', idea.text));
+      const stamp = (() => {
+        try { return new Date(idea.created_at).toLocaleDateString('he-IL'); }
+        catch { return ''; }
+      })();
+      meta.append(el('span', 'chip-meta',
+        [idea.author_name || 'תלמיד', stamp].filter(Boolean).join(' · ')));
+      item.append(meta);
+      const actions = el('div', 'auth-work-actions');
+      const del = el('button', 'btn-ghost auth-danger', 'מחיקה');
+      armed(del, 'מחיקה', async () => {
+        await backend.deleteIdea(idea.id);
+        refreshIdeas();
+      });
+      actions.append(del);
+      item.append(actions);
+      ideasList.append(item);
+    }
+  }
+
   showTab();
   return {
-    refresh() { refreshUsers(); refreshBank(); },
+    refresh() { refreshUsers(); refreshBank(); refreshIdeas(); },
   };
 }
 
@@ -7561,11 +7799,12 @@ if (typeof globalThis !== 'undefined') {
 const LIB = JSON.parse(document.getElementById('lib-data').textContent || '{}');
 
 const VIEWS = ['gate', 'quick', 'pro', 'identity', 'examples', 'explain',
-               'auth', 'bank', 'shared', 'admin'];
+               'auth', 'bank', 'shared', 'ideas', 'admin'];
 
 let authApi = { enabled: false, session: null, isAdmin: false };
 let bankApi = null;
 let sharedApi = null;
+let ideasApi = null;
 let adminApi = null;
 const signedOut = () => authApi.enabled && !authApi.session;
 
@@ -7583,6 +7822,7 @@ function setMode(name) {
   }
   if (name === 'bank' && bankApi) bankApi.refresh();
   if (name === 'shared' && sharedApi) sharedApi.refresh();
+  if (name === 'ideas' && ideasApi) ideasApi.refresh();
   if (name === 'admin' && adminApi) adminApi.refresh();
   /* the view lives in the address, so a screen can be linked to directly */
   if (name !== 'auth' && location.hash !== `#${name}`) {
@@ -7669,6 +7909,8 @@ if (Object.keys(LIB).length) {
           setMode('pro');
         },
       });
+    ideasApi = globalThis.PM.initIdeas(
+      document.getElementById('ideas-root'), LIB, authApi);
     adminApi = globalThis.PM.initAdmin(
       document.getElementById('admin-root'), LIB, authApi);
   }
