@@ -1410,7 +1410,7 @@ button { font-family: inherit; cursor: pointer; }
   <footer class="footer">
     <span class="chip-meta">HEBREW UI &middot; ENGLISH PROMPTS</span>
     <span class="chip-meta">NO SERVER &middot; ONE FILE</span>
-    <span class="chip-meta" data-build>BUILD 20.08 13:56</span>
+    <span class="chip-meta" data-build>BUILD 20.08 16:05</span>
   </footer>
 
 </div>
@@ -6602,6 +6602,13 @@ function createSupabase(config) {
        for one doomed request first, and the list sits on "loading" for
        seconds while it fails. */
     sharingReady: localStorage.getItem('pm_sharing') !== 'off',
+    /* Everyone's saved work. A student calling this receives their own rows
+       and nothing more, because the select policy decides, not the query. */
+    async listAllShots() {
+      await ensureFresh();
+      return request('/rest/v1/saved_shots'
+        + '?select=id,name,user_id,updated_at,shared&order=updated_at.desc');
+    },
     async listShared() {
       await ensureFresh();
       return request('/rest/v1/saved_shots'
@@ -7436,6 +7443,12 @@ function initIdeas(container, lib, authApi) {
 
   const header = el('div', 'panel-header');
   header.append(el('span', 'panel-title', 'רעיונות לשיפור המערכת'));
+  /* the teacher lands here looking for everybody's ideas: this screen shows
+     only your own by design, so the way to the full list is on it */
+  const toAdmin = el('button', 'btn-ghost', 'כל הרעיונות בבק-אופיס');
+  toAdmin.dataset.goto = 'admin';
+  toAdmin.hidden = true;
+  header.append(toAdmin);
   panel.append(header);
 
   panel.append(el('p', 'section-hint',
@@ -7495,6 +7508,7 @@ function initIdeas(container, lib, authApi) {
   });
 
   async function refresh() {
+    toAdmin.hidden = !authApi.isAdmin;
     name.textContent = authApi.displayName ? authApi.displayName() : '';
     list.innerHTML = '';
     list.append(el('p', 'section-hint', 'טוען…'));
@@ -7556,7 +7570,7 @@ if (typeof globalThis !== 'undefined') {
    where is_admin() is the only voice that counts. */
 'use strict';
 
-function initAdmin(container, lib, authApi) {
+function initAdmin(container, lib, authApi, hooks = {}) {
   const backend = authApi.backend;
 
   const el = (tag, cls, text) => {
@@ -7578,7 +7592,8 @@ function initAdmin(container, lib, authApi) {
   panel.append(tabs);
   const panes = {};
   let activeTab = 'users';
-  for (const [key, label] of [['users', 'תלמידים'], ['bank', 'בנק הפרומפטים'],
+  for (const [key, label] of [['users', 'תלמידים'], ['works', 'עבודות התלמידים'],
+                            ['bank', 'בנק הפרומפטים'],
                             ['ideas', 'רעיונות מהתלמידים']]) {
     const tab = el('button', 'tab', label);
     tab.dataset.tab = key;
@@ -8002,9 +8017,82 @@ function initAdmin(container, lib, authApi) {
     }
   }
 
+  /* ---- every work every student saved ----
+     The database hands an admin all of them and a student only their own,
+     so this screen cannot show more than it is entitled to even if the
+     query asks for everything. */
+  const worksPane = panes.works;
+  worksPane.append(el('p', 'section-hint',
+    'כל מה שהתלמידים שמרו בענן, החדש למעלה. אפשר לפתוח כל עבודה בטופס '
+    + 'המקצועי ולראות בדיוק מה היא מכילה. מחיקה כאן מוחקת את העבודה של '
+    + 'התלמיד לצמיתות.'));
+  const worksCount = el('p', 'chip-meta', '');
+  worksPane.append(worksCount);
+  const worksList = el('div', 'auth-work-list');
+  worksPane.append(worksList);
+
+  async function refreshWorks() {
+    worksList.innerHTML = '';
+    worksList.append(el('p', 'section-hint', 'טוען…'));
+    let shots, profiles;
+    try {
+      [shots, profiles] = await Promise.all(
+        [backend.listAllShots(), backend.listProfiles()]);
+    } catch {
+      worksList.innerHTML = '';
+      worksList.append(el('p', 'rule-note', 'טעינת העבודות נכשלה. נסו לרענן.'));
+      return;
+    }
+    /* saved_shots points at auth.users, not at profiles, so the name is
+       matched here rather than by the database */
+    const who = {};
+    for (const p of profiles) who[p.id] = p.name || p.email;
+
+    worksList.innerHTML = '';
+    worksCount.textContent = `${shots.length} עבודות מ-`
+      + `${new Set(shots.map((s2) => s2.user_id)).size} תלמידים`;
+    if (!shots.length) {
+      worksList.append(el('p', 'section-hint', 'עוד לא נשמרה אף עבודה.'));
+      return;
+    }
+    for (const shot of shots) {
+      const item = el('div', 'auth-work-row');
+      const meta = el('div', 'auth-work-meta');
+      const line = el('span', 'auth-work-name', shot.name);
+      if (shot.shared) line.append(el('span', 'chip-meta waiting-chip', 'משותפת'));
+      meta.append(line);
+      const stamp = (() => {
+        try { return new Date(shot.updated_at).toLocaleDateString('he-IL'); }
+        catch { return ''; }
+      })();
+      meta.append(el('span', 'chip-meta',
+        [who[shot.user_id] || 'תלמיד', stamp].filter(Boolean).join(' · ')));
+      item.append(meta);
+
+      const actions = el('div', 'auth-work-actions');
+      const open = el('button', 'btn-ghost', 'פתיחה בטופס');
+      open.addEventListener('click', async () => {
+        open.disabled = true;
+        try {
+          const spec = await backend.getShot(shot.id);
+          if (spec && hooks.openInPro) hooks.openInPro(spec);
+        } catch { open.textContent = 'שגיאה'; }
+        open.disabled = false;
+      });
+      const del = el('button', 'btn-ghost auth-danger', 'מחיקה');
+      armed(del, 'מחיקה', async () => {
+        await backend.deleteShot(shot.id);
+        refreshWorks();
+      });
+      actions.append(open, del);
+      item.append(actions);
+      worksList.append(item);
+    }
+  }
+
   showTab();
   return {
-    refresh() { refreshUsers(); refreshBank(); refreshIdeas(); },
+    refresh() { refreshUsers(); refreshWorks(); refreshBank(); refreshIdeas(); },
   };
 }
 
@@ -8137,7 +8225,12 @@ if (Object.keys(LIB).length) {
     ideasApi = globalThis.PM.initIdeas(
       document.getElementById('ideas-root'), LIB, authApi);
     adminApi = globalThis.PM.initAdmin(
-      document.getElementById('admin-root'), LIB, authApi);
+      document.getElementById('admin-root'), LIB, authApi, {
+        openInPro(spec) {
+          formApi.load(spec);
+          setMode('pro');
+        },
+      });
   }
 }
 
