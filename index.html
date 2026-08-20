@@ -1396,7 +1396,7 @@ button { font-family: inherit; cursor: pointer; }
   <footer class="footer">
     <span class="chip-meta">HEBREW UI &middot; ENGLISH PROMPTS</span>
     <span class="chip-meta">NO SERVER &middot; ONE FILE</span>
-    <span class="chip-meta" data-build>BUILD 20.08 12:05</span>
+    <span class="chip-meta" data-build>BUILD 20.08 13:00</span>
   </footer>
 
 </div>
@@ -6761,6 +6761,11 @@ function initAuth(container, lib, hooks = {}) {
   /* ---- the saved-work panel, opened from the chip ---- */
   let overlay = null;
   const closePanel = () => { if (overlay) { overlay.remove(); overlay = null; } };
+  /* a dialog that traps the page until a small button is found is a dialog
+     people fight with; escape closes both this panel and the save dialog */
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') closePanel();
+  });
 
   async function openWorkPanel() {
     closePanel();
