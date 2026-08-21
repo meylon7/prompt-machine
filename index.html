@@ -1286,6 +1286,10 @@ button { font-family: inherit; cursor: pointer; }
 }
 .draft-bar .btn-run { margin-inline-start: auto; }
 
+/* the camera bodies: wider than an icon, drawn to be recognised */
+.tile-icon.camera-art { height: 74px; padding: 6px 4px; }
+.tile-icon.camera-art svg { width: 100%; height: 100%; max-width: 104px; }
+
 </style>
 </head>
 <body>
@@ -1427,7 +1431,7 @@ button { font-family: inherit; cursor: pointer; }
   <footer class="footer">
     <span class="chip-meta">HEBREW UI &middot; ENGLISH PROMPTS</span>
     <span class="chip-meta">NO SERVER &middot; ONE FILE</span>
-    <span class="chip-meta" data-build>BUILD 21.08 14:32</span>
+    <span class="chip-meta" data-build>BUILD 21.08 15:49</span>
   </footer>
 
 </div>
@@ -3363,6 +3367,97 @@ if (typeof globalThis !== 'undefined') {
   globalThis.PM = Object.assign(globalThis.PM || {}, REFERENCE);
 }
 
+/* Prompt Machine — drawings of the camera bodies.
+   A student choosing between "full frame mirrorless" and "medium format
+   digital" is choosing between two words unless the shapes are on screen.
+   These are silhouettes, not logos: no brand, no model, just the profile
+   that makes each kind recognisable. Drawn on a 64x44 field so the grip,
+   the prism and the bellows keep their proportions to each other; a large
+   format camera really is that much bigger than a phone.
+
+   Every path uses currentColor, so a selected tile inverts with the rest
+   of the interface and no colour is hard coded. */
+'use strict';
+
+const CAMERA_ART = {
+  /* pentaprism hump, deep grip, a lens that sticks out: the shape everyone
+     draws when asked to draw "a camera" */
+  full_frame_dslr: `
+    <path d="M6 16h52a3 3 0 0 1 3 3v16a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V19a3 3 0 0 1 3-3z"/>
+    <path d="M24 16l3-6h10l3 6"/>
+    <path d="M52 16v-3h6v3"/>
+    <circle cx="32" cy="27" r="10"/>
+    <circle cx="32" cy="27" r="6"/>
+    <path d="M22 27a10 10 0 0 1 4-8"/>
+    <rect x="6" y="20" width="8" height="14" rx="2"/>`,
+
+  /* flatter top, the finder pushed to one side, a slimmer lens and a
+     shallower grip: the same camera with the mirror box removed */
+  full_frame_mirrorless: `
+    <path d="M8 17h48a3 3 0 0 1 3 3v15a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3V20a3 3 0 0 1 3-3z"/>
+    <path d="M14 17v-4h11v4"/>
+    <circle cx="34" cy="27" r="8.5"/>
+    <circle cx="34" cy="27" r="5"/>
+    <rect x="48" y="21" width="6" height="4" rx="1"/>`,
+
+  /* the same profile again, drawn smaller inside the same field, because
+     that is the whole difference: a smaller sensor in a smaller body */
+  aps_c: `
+    <path d="M14 20h36a3 3 0 0 1 3 3v12a3 3 0 0 1-3 3H14a3 3 0 0 1-3-3V23a3 3 0 0 1 3-3z"/>
+    <path d="M19 20v-3h8v3"/>
+    <circle cx="34" cy="29" r="6.5"/>
+    <circle cx="34" cy="29" r="3.5"/>`,
+
+  /* tall, square, a waist level finder hood open on top and a lens wide
+     enough to cover the bigger frame */
+  medium_format_digital: `
+    <path d="M13 14h38a3 3 0 0 1 3 3v22a3 3 0 0 1-3 3H13a3 3 0 0 1-3-3V17a3 3 0 0 1 3-3z"/>
+    <path d="M20 14V7h24v7"/>
+    <path d="M20 7l4-3h16l4 3"/>
+    <circle cx="32" cy="28" r="11"/>
+    <circle cx="32" cy="28" r="7"/>
+    <path d="M10 22h-3v8h3"/>`,
+
+  /* two standards and a bellows between them, on a rail, under a dark
+     cloth's worth of ground glass at the back */
+  large_format_film: `
+    <path d="M8 12h9v22H8z"/>
+    <path d="M47 8h11v30H47z"/>
+    <path d="M17 15l6 3-6 3 6 3-6 3 6 3-6 3"/>
+    <path d="M23 18h24M23 24h24M23 30h24" opacity="0.55"/>
+    <path d="M47 13l-24 5M47 33l-24-5"/>
+    <path d="M4 38h56"/>
+    <path d="M12 34v4M52 38v-4"/>`,
+
+  /* rangefinder: two windows across the top plate, a wind lever on the
+     right, a small round lens dead centre */
+  '35mm_film': `
+    <path d="M6 16h52a2 2 0 0 1 2 2v18a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V18a2 2 0 0 1 2-2z"/>
+    <circle cx="14" cy="22" r="3.5"/>
+    <circle cx="26" cy="22" r="2.5"/>
+    <circle cx="34" cy="28" r="8"/>
+    <circle cx="34" cy="28" r="4.5"/>
+    <path d="M50 16v-3h7v3"/>
+    <path d="M46 21h9"/>`,
+
+  /* held the other way round, and the only body here whose lenses are a
+     bump on the back rather than a barrel on the front */
+  phone: `
+    <rect x="22" y="4" width="20" height="36" rx="4"/>
+    <rect x="25" y="8" width="9" height="9" rx="2"/>
+    <circle cx="27.5" cy="10.5" r="1.6"/>
+    <circle cx="31.5" cy="14.5" r="1.6"/>
+    <path d="M29 36h6"/>`,
+};
+
+const CAMERA_ART_VIEWBOX = '0 0 64 44';
+
+const CAMERA_ART_MODULE = { CAMERA_ART, CAMERA_ART_VIEWBOX };
+if (typeof module !== 'undefined') module.exports = CAMERA_ART_MODULE;
+if (typeof globalThis !== 'undefined') {
+  globalThis.PM = Object.assign(globalThis.PM || {}, CAMERA_ART_MODULE);
+}
+
 /* Prompt Machine — the shared output pane: dialect tabs, validation pill,
    live prompt, meta chips, copy. Used by the quick path and the pro form so
    the two can never drift apart in behaviour. */
@@ -4578,6 +4673,18 @@ function initForm(root, lib, hooks = {}) {
       '<rect x="8" y="3" width="8" height="18" rx="2"/><circle cx="12" cy="18" r="1"/>',
   };
 
+  /* the camera bodies are drawn on a wider field than the 24px icons, and
+     they carry enough detail to be read at a glance rather than decorated */
+  function cameraArt(bodyClass) {
+    const art = globalThis.PM.CAMERA_ART;
+    const inner = art[bodyClass] || art.full_frame_mirrorless;
+    const span = el('span', 'tile-icon camera-art');
+    span.innerHTML = `<svg viewBox="${globalThis.PM.CAMERA_ART_VIEWBOX}" `
+      + 'fill="none" stroke="currentColor" stroke-width="1.6" '
+      + `stroke-linecap="round" stroke-linejoin="round">${inner}</svg>`;
+    return span;
+  }
+
   function svgWrap(inner, size = 26) {
     const span = el('span', 'tile-icon');
     span.innerHTML = `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${inner}</svg>`;
@@ -5300,7 +5407,7 @@ function initForm(root, lib, hooks = {}) {
       const bodyGrid = el('div', 'tile-grid picker-grid');
       for (const [value, name] of Object.entries(labels.body_class)) {
         bodyGrid.append(bigTile({
-          icon: svgWrap(CAMERA_ICONS[value] || CAMERA_ICONS.full_frame_mirrorless),
+          icon: cameraArt(value),
           label: name,
           sub: labels.format[FORMAT_OF_BODY[value]] || '',
           helpTitle: name,
