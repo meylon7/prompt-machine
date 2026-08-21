@@ -1292,8 +1292,9 @@ button { font-family: inherit; cursor: pointer; }
 
 /* the named cameras and film stocks */
 .model-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
-.film-row { flex-wrap: wrap; gap: 6px; }
-.film-row .seg-btn { flex: 0 0 auto; }
+.film-row { flex-wrap: wrap; gap: 6px; margin-bottom: 4px; }
+.film-row .segment { flex: 0 0 auto; }
+.attached-ref-kinds { flex-wrap: wrap; }
 
 </style>
 </head>
@@ -1436,7 +1437,7 @@ button { font-family: inherit; cursor: pointer; }
   <footer class="footer">
     <span class="chip-meta">HEBREW UI &middot; ENGLISH PROMPTS</span>
     <span class="chip-meta">NO SERVER &middot; ONE FILE</span>
-    <span class="chip-meta" data-build>BUILD 21.08 16:04</span>
+    <span class="chip-meta" data-build>BUILD 21.08 17:00</span>
   </footer>
 
 </div>
@@ -3876,7 +3877,7 @@ function attachedReferenceControl(current, onChange) {
     + 'את המראה, בעוד התאורה, המסגור והרקע נקבעים כאן.');
   wrap.append(hint);
 
-  const kinds = el('div', 'seg attached-ref-kinds');
+  const kinds = el('div', 'segmented attached-ref-kinds');
   const currentKind = (typeof current === 'string' ? current
     : (current && current.kind)) || 'person';
 
@@ -3889,7 +3890,7 @@ function attachedReferenceControl(current, onChange) {
 
   let chosen = currentKind;
   for (const [key, label] of ATTACHED_KINDS) {
-    const btn = el('button', 'seg-btn', label);
+    const btn = el('button', 'segment', label);
     btn.type = 'button';
     btn.dataset.kind = key;
     btn.addEventListener('click', () => {
@@ -5499,13 +5500,13 @@ function initForm(root, lib, hooks = {}) {
       groupPane.append(modelGrid);
 
       groupPane.append(sectionLabel('סרט (רשות)'));
-      const filmRow = el('div', 'seg film-row');
-      const noFilm = el('button', 'seg-btn' + (spec.camera.film ? '' : ' active'),
+      const filmRow = el('div', 'segmented film-row');
+      const noFilm = el('button', 'segment' + (spec.camera.film ? '' : ' active'),
         'בלי סרט');
       noFilm.addEventListener('click', () => { delete spec.camera.film; render(); });
       filmRow.append(noFilm);
       for (const [key, item] of Object.entries(cams.films)) {
-        const btn = el('button', 'seg-btn'
+        const btn = el('button', 'segment'
           + (spec.camera.film === key ? ' active' : ''), item.label);
         globalThis.PM.attachPopover(btn,
           { title: item.label, lines: [{ text: item.he, strong: true },
