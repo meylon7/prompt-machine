@@ -887,8 +887,16 @@ button { font-family: inherit; cursor: pointer; }
    --------------------------------------------------------------------- */
 
 .footer {
-  display: flex; justify-content: center; gap: 8px;
+  display: flex; justify-content: center; align-items: center;
+  flex-wrap: wrap; gap: 8px;
   padding: 14px;
+}
+/* the credit sits with the build stamps but is not one of them: it is a
+   sentence about who made the thing, not a fact about this copy of it */
+.footer-credit {
+  font-size: 12px; font-weight: 500;
+  color: var(--text-muted);
+  margin-inline-end: 4px;
 }
 
 /* reduced motion */
@@ -1676,9 +1684,10 @@ button { font-family: inherit; cursor: pointer; }
   </main>
 
   <footer class="footer">
+    <span class="footer-credit">נוצר על ידי סטודיו אילון</span>
     <span class="chip-meta">HEBREW UI &middot; ENGLISH PROMPTS</span>
     <span class="chip-meta">NO SERVER &middot; ONE FILE</span>
-    <span class="chip-meta" data-build>BUILD 23.08 13:27</span>
+    <span class="chip-meta" data-build>BUILD 23.08 13:34</span>
   </footer>
 
 </div>
