@@ -37,53 +37,84 @@
    ===================================================================== */
 
 :root {
-  /* canvas / void */
-  --void-edge:      #060B14;
-  --void:           #0A121F;
-  --void-high:      #101825;
-  --void-warm:      #151D2A;
+  /* canvas: the page is light now, and the ramp runs the other way. The
+     names are kept as they were on purpose: every rule in this file speaks
+     in roles, so a repaint is a change to this block and to nothing else. */
+  --void-edge:      #E7EBF7;
+  --void:           #F4F6FC;
+  --void-high:      #FFFFFF;
+  --void-warm:      #EEF1FA;
 
-  /* surfaces, elevation order */
-  --surface-0:      #0C1423;
-  --surface-1:      #0F1626;
-  --surface-2:      #121B2E;
-  --surface-3:      #141B2B;
-  --surface-4:      #192130;
-  --surface-top:    #1C2431;
+  /* surfaces, elevation order. On a light page elevation reads as lighter,
+     so a card sits on the page and a tile sits on the card. */
+  --surface-0:      #EAF0FF;
+  --surface-1:      #CBD9FF;
+  --surface-2:      #D6E1FF;
+  --surface-3:      #DFE7FF;
+  --surface-4:      #D6E1FF;
+  --surface-top:    #E6ECFF;
 
-  /* borders */
-  --border-subtle:  rgba(93, 116, 152, 0.14);
-  --border-mid:     rgba(93, 116, 152, 0.24);
-  --border-strong:  rgba(120, 148, 190, 0.35);
-  --border-dashed:  rgba(90, 130, 180, 0.45);
+  /* menus: the one dark surface left, and the contrast that makes the bar
+     read as a frame around the work rather than as part of it */
+  --menu-bg:        #3C4665;
+  --menu-text:      #DBE0EE;
 
-  /* cyan — the brand signal */
-  --cyan:           #24B8F0;
-  --cyan-bright:    #64D4FC;
-  --cyan-pale:      #98E0F8;
-  --cyan-deep:      #186890;
-  --cyan-dim:       #104058;
-  --cyan-border:    rgba(56, 192, 240, 0.55);
-  --cyan-glow:      rgba(36, 184, 240, 0.35);
-  --cyan-tint:      rgba(36, 184, 240, 0.10);
+  /* borders, drawn in the ink colour rather than in a light haze */
+  --border-subtle:  rgba(60, 70, 101, 0.14);
+  --border-mid:     rgba(60, 70, 101, 0.22);
+  --border-strong:  rgba(60, 70, 101, 0.34);
+  --border-dashed:  rgba(60, 70, 101, 0.45);
 
-  /* green — data flow only */
-  --green:          #3C9C80;
-  --green-bright:   #44A888;
-  --green-chip:     #205C50;
-  --green-accent:   #1D5A4E;
+  /* amber, the brand signal. Two stops make every gradient in the file;
+     --cyan-bright is the same signal at text weight, and it has to be dark
+     enough to read on a light card, which is why it is not the same amber. */
+  --cyan:           #FFB52E;
+  --cyan-pale:      #FFCF72;
+  --cyan-bright:    #8A5704;
+  --cyan-deep:      #B87400;
+  --cyan-dim:       #FFE2AB;
+  --cyan-border:    rgba(214, 138, 0, 0.7);
+  --cyan-glow:      rgba(255, 181, 46, 0.45);
+  --cyan-tint:      rgba(255, 181, 46, 0.16);
 
-  /* purple — prompt/text flow only */
-  --purple:         #9898EC;
-  --purple-dim:     #545878;
+  /* green: data flow only, darkened to hold on a light page */
+  --green:          #2E7D68;
+  --green-bright:   #1F6E59;
+  --green-chip:     #CFE9E0;
+  --green-accent:   #2E7D68;
+
+  /* purple: prompt/text flow only */
+  --purple:         #5B5BC0;
+  --purple-dim:     #9198BC;
 
   /* text */
-  --text-primary:   #E9EEF5;
-  --text-secondary: #98A2B3;
-  --text-muted:     #707885;
-  --text-faint:     #515D6D;
-  --text-mono-dim:  #374257;
-  --text-on-cyan:   #06222E;
+  /* The ramp is shallower than it was on the dark theme, and on purpose.
+     The card colour is light but not white, so every step down in tone
+     runs out of contrast quickly: measured against #CBD9FF, the greys that
+     read perfectly well on the page background fall under 4.5 to 1 on a
+     card. The hierarchy is carried by size and weight instead, which
+     survives a repaint and a photocopier both. */
+  --text-primary:   #3C4665;
+  --text-secondary: #4A5372;
+  --text-muted:     #4F5878;
+  --text-faint:     #545D7D;
+  --text-mono-dim:  #6E7691;
+  --text-on-cyan:   #3C4665;
+
+  /* relief. A light page has no glow to work with, so a control announces
+     itself the way a physical one does: a hairline of light along the top
+     edge, a tight contact shadow directly under it, and a wider soft one
+     further out. Pressing it removes the gap between the control and the
+     page, which is the part that makes it feel like a button rather than a
+     rectangle that changes colour. */
+  --lift:       inset 0 1px 0 rgba(255, 255, 255, 0.65),
+                0 1px 2px rgba(60, 70, 101, 0.14),
+                0 3px 8px rgba(60, 70, 101, 0.10);
+  --lift-hover: inset 0 1px 0 rgba(255, 255, 255, 0.75),
+                0 2px 4px rgba(60, 70, 101, 0.16),
+                0 6px 14px rgba(60, 70, 101, 0.13);
+  --lift-press: inset 0 1px 3px rgba(60, 70, 101, 0.22),
+                0 1px 1px rgba(60, 70, 101, 0.10);
 
   /* geometry */
   --r-node: 14px;
@@ -131,7 +162,7 @@ button { font-family: inherit; cursor: pointer; }
   content: '';
   position: absolute; inset: 0;
   background-image: radial-gradient(circle,
-    rgba(120, 150, 200, 0.10) 1px, transparent 1px);
+    rgba(60, 70, 101, 0.10) 1px, transparent 1px);
   background-size: 26px 26px;
   pointer-events: none;
 }
@@ -145,8 +176,8 @@ button { font-family: inherit; cursor: pointer; }
   /* the bar grows instead of pushing buttons off the edge: a navigation
      item that cannot be seen is the same as one that does not exist */
   min-height: 52px;
-  background: var(--surface-top);
-  border-bottom: 1px solid var(--border-subtle);
+  background: var(--menu-bg);
+  border-bottom: 1px solid var(--menu-bg);
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -164,17 +195,35 @@ button { font-family: inherit; cursor: pointer; }
 .app-chip svg { width: 16px; height: 16px; }
 .app-title {
   font-size: 14px; font-weight: 600;
-  color: var(--text-primary);
+  color: var(--menu-text);
 }
 .topbar .chip-meta { margin-inline-start: 4px; }
+
+/* THE ONE DARK SURFACE. Everything in this file is written for a light
+   page, so the bar has to restate its own text and borders rather than
+   inherit them. The ghost button keeps its light form everywhere else,
+   because it is used inside panels too and a dark pill on a light card
+   would read as a different control. */
+.topbar .chip-meta { color: var(--menu-text); border-color: rgba(219, 224, 238, 0.28); }
+.topbar .btn-ghost {
+  color: var(--menu-text);
+  background: rgba(219, 224, 238, 0.08);
+  border-color: rgba(219, 224, 238, 0.24);
+}
+.topbar .btn-ghost:hover {
+  color: #FFFFFF;
+  border-color: rgba(219, 224, 238, 0.5);
+  background: rgba(219, 224, 238, 0.16);
+}
 .topbar-spacer { margin-inline-start: auto; }
 
 /* mode switch pills, hidden at the gate */
 .mode-switch { display: flex; flex-wrap: wrap; gap: 6px; }
-.mode-switch .btn-ghost.active {
-  color: var(--cyan-bright);
-  border-color: var(--cyan-border);
-  background: var(--cyan-tint);
+.mode-switch .btn-ghost.active,
+.topbar .btn-ghost.active:hover {
+  color: var(--text-on-cyan);
+  border-color: transparent;
+  background: linear-gradient(90deg, var(--cyan) 0%, var(--cyan-pale) 100%);
 }
 
 /* ---------------------------------------------------------------------
@@ -222,7 +271,7 @@ button { font-family: inherit; cursor: pointer; }
   background: var(--surface-1);
   border: 1px solid var(--border-subtle);
   border-radius: var(--r-panel);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 10px 30px rgba(60, 70, 101, 0.10);
 }
 .panel-header {
   display: flex; align-items: center; gap: 10px;
@@ -323,8 +372,8 @@ button { font-family: inherit; cursor: pointer; }
   box-shadow: 0 0 16px var(--cyan-glow);
 }
 .tile.selected .tile-label { color: var(--text-on-cyan); }
-.tile.selected .tile-sub   { color: rgba(6, 34, 46, 0.75); }
-.tile.selected .tile-icon  { background: rgba(6, 34, 46, 0.2); color: var(--text-on-cyan); }
+.tile.selected .tile-sub   { color: rgba(60, 70, 101, 0.78); }
+.tile.selected .tile-icon  { background: rgba(60, 70, 101, 0.18); color: var(--text-on-cyan); }
 
 /* ---------------------------------------------------------------------
    Views
@@ -346,24 +395,28 @@ button { font-family: inherit; cursor: pointer; }
 
 .gate-cards {
   display: grid;
-  grid-template-columns: repeat(3, 220px);
+  /* four routes, four columns. Three columns left the fourth card orphaned
+     on a row of its own, which reads as an afterthought rather than as a
+     way in. */
+  grid-template-columns: repeat(4, 220px);
   gap: 14px;
   justify-content: center;
 }
-@media (max-width: 760px) { .gate-cards { grid-template-columns: 1fr; } }
+@media (max-width: 1000px) { .gate-cards { grid-template-columns: repeat(2, 220px); } }
+@media (max-width: 520px) { .gate-cards { grid-template-columns: 1fr; } }
 
 .gate-card {
   background: var(--surface-1);
   border: 1px solid var(--border-mid);
   border-radius: var(--r-node);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 10px 30px rgba(60, 70, 101, 0.10);
   padding: 18px 16px 16px;
   text-align: center;
   transition: border-color .15s, box-shadow .15s, transform .15s;
 }
 .gate-card:hover {
   border-color: var(--cyan-border);
-  box-shadow: 0 0 24px var(--cyan-glow), 0 10px 30px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 0 24px var(--cyan-glow), 0 10px 30px rgba(60, 70, 101, 0.10);
   transform: translateY(-2px);
 }
 .gate-card .tile-icon { height: 64px; margin-bottom: 12px; }
@@ -429,7 +482,7 @@ button { font-family: inherit; cursor: pointer; }
   background: var(--surface-4);
   color: var(--text-primary);
 }
-.step-tab.active .step-num { background: rgba(6, 34, 46, 0.25); color: var(--text-on-cyan); }
+.step-tab.active .step-num { background: rgba(60, 70, 101, 0.20); color: var(--text-on-cyan); }
 .step-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .step-name { font-size: 13px; font-weight: 600; color: var(--text-primary); }
 .step-tab.active .step-name { color: var(--text-on-cyan); }
@@ -438,7 +491,7 @@ button { font-family: inherit; cursor: pointer; }
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   max-width: 120px;
 }
-.step-tab.active .step-choice { color: rgba(6, 34, 46, 0.75); }
+.step-tab.active .step-choice { color: rgba(60, 70, 101, 0.78); }
 
 .step-pane[hidden] { display: none !important; }
 
@@ -497,9 +550,9 @@ button { font-family: inherit; cursor: pointer; }
   border-radius: var(--r-pill);
   padding: 4px 10px;
 }
-.status-pill.ok    { color: var(--green-bright); border: 1px solid rgba(68,168,136,.4); }
-.status-pill.warn  { color: var(--purple);       border: 1px solid rgba(152,152,236,.4); }
-.status-pill.error { color: #E08A8A;             border: 1px solid rgba(224,138,138,.4); }
+.status-pill.ok    { color: var(--green-bright); border: 1px solid rgba(46, 125, 104, 0.45); }
+.status-pill.warn  { color: var(--purple);       border: 1px solid rgba(91, 91, 192, 0.45); }
+.status-pill.error { color: #B23A30;             border: 1px solid rgba(178, 58, 48, 0.4); }
 
 .dialect-tabs .tab { font-size: 12.5px; padding: 8px 0; }
 
@@ -520,7 +573,7 @@ button { font-family: inherit; cursor: pointer; }
   text-align: left;
 }
 .prompt-box::-webkit-scrollbar { width: 4px; }
-.prompt-box::-webkit-scrollbar-thumb { background: #3F4A65; border-radius: 2px; }
+.prompt-box::-webkit-scrollbar-thumb { background: #A9B0C6; border-radius: 2px; }
 
 .note-box {
   font-size: 12px; color: var(--text-muted); min-height: 0;
@@ -542,7 +595,7 @@ button { font-family: inherit; cursor: pointer; }
 .note-link:hover { color: var(--cyan-pale); }
 
 .ph-link { cursor: pointer; border-bottom: 1px dashed rgba(152, 152, 236, 0.5); }
-.ph-link:hover { color: #B8B8F4; background: rgba(152, 152, 236, 0.18); }
+.ph-link:hover { color: #4646A8; background: rgba(152, 152, 236, 0.18); }
 
 /* ---- the system popover: one styled tooltip for everything ---- */
 
@@ -550,10 +603,11 @@ button { font-family: inherit; cursor: pointer; }
   position: fixed;
   z-index: 50;
   max-width: 320px;
-  background: var(--surface-2);
-  border: 1px solid var(--border-mid);
+  background: var(--menu-bg);
+  color: var(--menu-text);
+  border: 1px solid var(--menu-bg);
   border-radius: var(--r-field);
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 20px 50px rgba(60, 70, 101, 0.18);
   padding: 12px 14px;
   display: flex; flex-direction: column; gap: 7px;
   pointer-events: none;
@@ -778,13 +832,13 @@ button { font-family: inherit; cursor: pointer; }
 /* ---- the lighting sketch: the one deliberately dark surface ---- */
 
 .sketch-wrap {
-  background: #060B14;
+  background: #EAF0FF;
   border: 1px solid var(--border-mid);
   border-radius: var(--r-tile);
   padding: 8px;
 }
 .sketch-svg { display: block; width: 100%; height: auto; direction: ltr; }
-.sketch-ring { fill: none; stroke: rgba(93, 116, 152, 0.18); stroke-dasharray: 2 4; }
+.sketch-ring { fill: none; stroke: rgba(60, 70, 101, 0.25); stroke-dasharray: 2 4; }
 .sketch-ring-label { font: 400 8.5px var(--font-mono); fill: #374257; }
 .sketch-label { font: 600 11px var(--font-ui); }
 .sketch-meta { font: 400 9px var(--font-mono); fill: #707885; }
@@ -898,7 +952,7 @@ button { font-family: inherit; cursor: pointer; }
 .example-tile-tags { display: flex; flex-wrap: wrap; gap: 5px; }
 .example-tile.selected .example-tile-tags .chip-meta {
   color: var(--text-on-cyan);
-  border-color: rgba(6, 34, 46, 0.35);
+  border-color: rgba(60, 70, 101, 0.40);
 }
 
 .example-detail {
@@ -972,9 +1026,9 @@ button { font-family: inherit; cursor: pointer; }
   border: 1px solid var(--border-mid);
   border-top-color: var(--border-strong);
   box-shadow:
-    0 24px 50px rgba(0, 0, 0, 0.55),
-    0 3px 10px rgba(0, 0, 0, 0.35),
-    inset 0 1px 0 rgba(233, 238, 245, 0.06);
+    0 24px 50px rgba(60, 70, 101, 0.14),
+    0 3px 10px rgba(60, 70, 101, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7);
 }
 .auth-card .panel-header { padding: 0 0 20px; }
 .auth-tabs { margin-bottom: 16px; }
@@ -988,14 +1042,14 @@ button { font-family: inherit; cursor: pointer; }
 .auth-submit { width: 100%; margin-top: 4px; }
 .auth-alt { align-self: center; font-size: 13.5px; }
 .auth-notice { font-size: 13.5px; min-height: 18px; margin: 0; }
-.auth-notice.error { color: #E8887C; }
+.auth-notice.error { color: #B23A30; }
 .auth-notice.ok { color: var(--green-bright); }
 
 .auth-chip { max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
 
 .auth-overlay {
   position: fixed; inset: 0;
-  background: rgba(4, 8, 16, 0.66);
+  background: rgba(60, 70, 101, 0.45);
   display: grid; place-items: center;
   z-index: 60;
 }
@@ -1015,7 +1069,7 @@ button { font-family: inherit; cursor: pointer; }
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .auth-work-actions { display: flex; gap: 6px; flex: none; }
-.auth-danger { color: #E8887C; }
+.auth-danger { color: #B23A30; }
 
 /* ---------------------------------------------------------------------
    Prompt bank + backoffice
@@ -1058,7 +1112,7 @@ button { font-family: inherit; cursor: pointer; }
 .admin-users { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
 .admin-user-row.blocked { opacity: 0.6; }
 .admin-chip { color: var(--cyan-bright); border-color: var(--cyan-border); margin-inline-start: 8px; }
-.blocked-chip { color: #E8887C; border-color: rgba(232, 136, 124, 0.4); margin-inline-start: 8px; }
+.blocked-chip { color: #B23A30; border-color: rgba(178, 58, 48, 0.4); margin-inline-start: 8px; }
 
 .admin-bank-form {
   display: flex; flex-direction: column; gap: 10px;
@@ -1103,9 +1157,9 @@ button { font-family: inherit; cursor: pointer; }
   border: 1px solid var(--border-mid);
   border-top-color: var(--border-strong);
   box-shadow:
-    0 24px 50px rgba(0, 0, 0, 0.5),
-    0 3px 10px rgba(0, 0, 0, 0.3),
-    inset 0 1px 0 rgba(233, 238, 245, 0.06);
+    0 24px 50px rgba(60, 70, 101, 0.13),
+    0 3px 10px rgba(60, 70, 101, 0.07),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7);
 }
 
 .view .panel:not(.quick-output) {
@@ -1125,9 +1179,9 @@ button { font-family: inherit; cursor: pointer; }
   border-top-color: var(--border-strong);
   border-radius: var(--r-panel);
   box-shadow:
-    0 24px 50px rgba(0, 0, 0, 0.5),
-    0 3px 10px rgba(0, 0, 0, 0.3),
-    inset 0 1px 0 rgba(233, 238, 245, 0.06);
+    0 24px 50px rgba(60, 70, 101, 0.13),
+    0 3px 10px rgba(60, 70, 101, 0.07),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7);
   padding: 26px 30px;
 }
 
@@ -1270,7 +1324,7 @@ button { font-family: inherit; cursor: pointer; }
 .double-exposure-field .free-text { width: 100%; }
 
 /* a translation that was refused, so the Hebrew stayed */
-.field-note.warn { color: var(--amber, #E8B87C); }
+.field-note.warn { color: var(--amber, #B5730A); }
 
 /* the wide description of a scene */
 .scene-text { width: 100%; resize: vertical; min-height: 76px; line-height: 1.55; }
@@ -1324,7 +1378,7 @@ button { font-family: inherit; cursor: pointer; }
    apart and always shown, even when it is empty */
 .gen-read-en .gen-read-value {
   direction: ltr; text-align: left; unicode-bidi: isolate;
-  color: var(--cyan-pale); font-size: 12.5px;
+  color: var(--cyan-bright); font-size: 12.5px;
 }
 .gen-warn {
   margin: 8px 16px 0; padding: 9px 12px;
@@ -1342,7 +1396,7 @@ button { font-family: inherit; cursor: pointer; }
   background: var(--surface-1);
   border: 1px solid var(--border-subtle);
   border-radius: var(--r-panel);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 10px 30px rgba(60, 70, 101, 0.10);
   padding: 14px 14px 4px;
   display: flex; flex-direction: column; gap: 4px;
 }
@@ -1372,6 +1426,101 @@ button { font-family: inherit; cursor: pointer; }
 .gen-ran .gen-lead { display: none; }
 .gen-ran .gen-input { min-height: 44px; }
 .gen-ran .gen-brief { padding: 14px 20px 16px; }
+
+
+/* =====================================================================
+   Relief: every control stands off the page a little
+   ---------------------------------------------------------------------
+   One block rather than a shadow added to each rule, so the depth of the
+   whole interface is a thing you can read in one place and change in one
+   place. The transition is short on purpose: a button that takes a long
+   time to settle reads as an animation, not as a surface.
+   ===================================================================== */
+
+.btn-run,
+.btn-ghost,
+.segment,
+.tab,
+.tile,
+.gate-card,
+.step-tab,
+.bank-copy {
+  box-shadow: var(--lift);
+  transition: box-shadow .14s ease, transform .14s ease;
+}
+
+.btn-run:hover,
+.btn-ghost:hover,
+.segment:hover,
+.tab:hover,
+.tile:hover,
+.gate-card:hover,
+.step-tab:hover,
+.bank-copy:hover {
+  box-shadow: var(--lift-hover);
+  transform: translateY(-1px);
+}
+
+/* pressed: the control meets the page */
+.btn-run:active,
+.btn-ghost:active,
+.segment:active,
+.tab:active,
+.tile:active,
+.gate-card:active,
+.step-tab:active,
+.bank-copy:active {
+  box-shadow: var(--lift-press);
+  transform: translateY(1px);
+}
+
+/* the amber states keep their halo, and gain the same edge as everything
+   else. The halo alone read as flat once the page went light. */
+.btn-run,
+.tab.active,
+.segment.active,
+.tile.selected,
+.step-tab.active,
+.mode-switch .btn-ghost.active {
+  box-shadow: var(--lift), 0 0 12px var(--cyan-glow);
+}
+.btn-run:hover,
+.tab.active:hover,
+.segment.active:hover,
+.tile.selected:hover,
+.step-tab.active:hover,
+.mode-switch .btn-ghost.active:hover {
+  box-shadow: var(--lift-hover), 0 0 18px var(--cyan-glow);
+}
+
+/* on the dark bar a white top edge would be a scratch, so the relief there
+   is drawn in the bar's own light instead */
+.topbar .btn-ghost {
+  box-shadow: inset 0 1px 0 rgba(219, 224, 238, 0.16),
+              0 1px 2px rgba(20, 24, 38, 0.35);
+}
+.topbar .btn-ghost:hover {
+  box-shadow: inset 0 1px 0 rgba(219, 224, 238, 0.26),
+              0 3px 7px rgba(20, 24, 38, 0.4);
+}
+
+/* a control that cannot be pressed must not look like it can */
+.btn-run:disabled,
+.btn-ghost:disabled {
+  box-shadow: none;
+  transform: none;
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* a text link is not a surface */
+.gate-link, .note-link, .ph-link, .option-tile.expander {
+  box-shadow: none;
+}
+.gate-link:hover, .note-link:hover, .ph-link:hover {
+  box-shadow: none;
+  transform: none;
+}
 
 </style>
 </head>
@@ -1417,11 +1566,12 @@ button { font-family: inherit; cursor: pointer; }
     </div>
     <div class="gate-cards">
       <button class="gate-card" data-goto="generator">
-        <svg class="gate-card-art" viewBox="0 0 64 44" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M32 6l3.2 7.6L43 16l-7.8 2.4L32 26l-3.2-7.6L21 16l7.8-2.4z"/>
-          <path d="M15 27l1.6 3.8L20 32l-3.4 1.2L15 37l-1.6-3.8L10 32l3.4-1.2z"/>
-          <path d="M49 25l1.4 3.3L54 29.6l-3.6 1.3L49 34l-1.4-3.1L44 29.6l3.6-1.3z"/>
-        </svg>
+        <span class="tile-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 3l1.9 4.6L18.5 9.5 13.9 11.4 12 16l-1.9-4.6L5.5 9.5l4.6-1.9z"/>
+            <path d="M18.5 15.5l.8 1.9 1.9.8-1.9.8-.8 1.9-.8-1.9-1.9-.8 1.9-.8z"/>
+          </svg>
+        </span>
         <span class="gate-card-label">מחולל רעיונות</span>
         <span class="gate-card-sub">כותבים כיוון בעברית,<br>ומקבלים שלוש עבודות שלמות</span>
       </button>
@@ -1528,7 +1678,7 @@ button { font-family: inherit; cursor: pointer; }
   <footer class="footer">
     <span class="chip-meta">HEBREW UI &middot; ENGLISH PROMPTS</span>
     <span class="chip-meta">NO SERVER &middot; ONE FILE</span>
-    <span class="chip-meta" data-build>BUILD 23.08 11:56</span>
+    <span class="chip-meta" data-build>BUILD 23.08 13:27</span>
   </footer>
 
 </div>
